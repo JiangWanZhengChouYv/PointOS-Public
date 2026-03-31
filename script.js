@@ -8,11 +8,18 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
 // 预设壁纸
 const PRESET_WALLPAPERS = [
-    { id: 'default', name: '默认渐变', url: '', type: 'default' },
-    { id: 'nature', name: '自然风光', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80', type: 'preset' },
-    { id: 'geometric', name: '几何图案', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80', type: 'preset' },
-    { id: 'library', name: '图书馆', url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1920&q=80', type: 'preset' },
-    { id: 'classroom', name: '教室', url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1920&q=80', type: 'preset' }
+    { id: 'default', name: '默认渐变', url: '', type: 'default', category: '系统' },
+    { id: 'nature1', name: '自然风光1', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80', type: 'preset', category: '自然风景' },
+    { id: 'nature2', name: '自然风光2', url: 'https://images.unsplash.com/photo-1507525428034-b723cf96123e?w=1920&q=80', type: 'preset', category: '自然风景' },
+    { id: 'nature3', name: '自然风光3', url: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?w=1920&q=80', type: 'preset', category: '自然风景' },
+    { id: 'geometric1', name: '几何图案1', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80', type: 'preset', category: '几何图案' },
+    { id: 'geometric2', name: '几何图案2', url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80', type: 'preset', category: '几何图案' },
+    { id: 'school1', name: '图书馆', url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1920&q=80', type: 'preset', category: '校园环境' },
+    { id: 'school2', name: '教室', url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1920&q=80', type: 'preset', category: '校园环境' },
+    { id: 'abstract1', name: '抽象艺术1', url: 'https://images.unsplash.com/photo-1543836091-9310d27c6c7a?w=1920&q=80', type: 'preset', category: '抽象艺术' },
+    { id: 'abstract2', name: '抽象艺术2', url: 'https://images.unsplash.com/photo-1549880181-56a44cf4a9a5?w=1920&q=80', type: 'preset', category: '抽象艺术' },
+    { id: 'minimal1', name: '极简风格1', url: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=1920&q=80', type: 'preset', category: '极简风格' },
+    { id: 'minimal2', name: '极简风格2', url: 'https://images.unsplash.com/photo-1550684376-efcbd6e3f031?w=1920&q=80', type: 'preset', category: '极简风格' }
 ];
 
 // 初始化壁纸设置
@@ -31,6 +38,47 @@ function saveWallpaperSettings(settings) {
     localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(settings));
 }
 
+// 检测网络环境
+function checkNetworkStatus() {
+    return new Promise((resolve) => {
+        if ('connection' in navigator) {
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            const effectiveType = connection.effectiveType;
+            const downlink = connection.downlink;
+            
+            // 判断网络环境是否不佳
+            if (effectiveType === '2g' || downlink < 1) {
+                resolve({ isPoor: true, effectiveType, downlink });
+            } else {
+                resolve({ isPoor: false, effectiveType, downlink });
+            }
+        } else {
+            // 降级方案：使用性能API检测
+            const startTime = performance.now();
+            fetch('https://www.google.com/generate_204')
+                .then(() => {
+                    const endTime = performance.now();
+                    const latency = endTime - startTime;
+                    resolve({ isPoor: latency > 500, latency });
+                })
+                .catch(() => {
+                    resolve({ isPoor: true, error: 'Network error' });
+                });
+        }
+    });
+}
+
+// 使用jsdelivr CDN加速URL
+function getCDNAcceleratedURL(url) {
+    // 提取图片ID
+    const match = url.match(/photo-(\d+)/);
+    if (match && match[1]) {
+        const photoId = match[1];
+        return `https://cdn.jsdelivr.net/gh/unsplash/photos@main/${photoId}.jpg`;
+    }
+    return url;
+}
+
 // 应用壁纸
 function applyWallpaper(settings) {
     const body = document.body;
@@ -39,17 +87,34 @@ function applyWallpaper(settings) {
         body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
         body.classList.remove('wallpaper-custom');
     } else {
-        // 实现图片懒加载
-        const img = new Image();
-        img.onload = function() {
-            body.style.backgroundImage = `url(${settings.url})`;
-            body.style.backgroundSize = 'cover';
-            body.style.backgroundPosition = 'center';
-            body.style.backgroundRepeat = 'no-repeat';
-            body.style.backgroundAttachment = 'fixed';
-            body.classList.add('wallpaper-custom');
-        };
-        img.src = settings.url;
+        // 检测网络环境
+        checkNetworkStatus().then(networkStatus => {
+            let wallpaperUrl = settings.url;
+            
+            // 如果网络环境不佳，使用CDN加速
+            if (networkStatus.isPoor) {
+                wallpaperUrl = getCDNAcceleratedURL(settings.url);
+            }
+            
+            // 实现图片懒加载和错误处理
+            const img = new Image();
+            img.onload = function() {
+                body.style.backgroundImage = `url(${wallpaperUrl})`;
+                body.style.backgroundSize = 'cover';
+                body.style.backgroundPosition = 'center';
+                body.style.backgroundRepeat = 'no-repeat';
+                body.style.backgroundAttachment = 'fixed';
+                body.classList.add('wallpaper-custom');
+            };
+            img.onerror = function() {
+                // 加载失败时使用默认背景
+                body.style.backgroundImage = 'none';
+                body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
+                body.classList.remove('wallpaper-custom');
+                console.error('壁纸加载失败，使用默认背景');
+            };
+            img.src = wallpaperUrl;
+        });
     }
 }
 
@@ -206,44 +271,86 @@ function createWallpaperPopup(currentSettings) {
     presetsTitle.textContent = '预设壁纸';
     presetsSection.appendChild(presetsTitle);
     
-    const presetsContainer = document.createElement('div');
-    presetsContainer.className = 'presets-container';
-    
+    // 按类别组织壁纸
+    const wallpaperByCategory = {};
     PRESET_WALLPAPERS.forEach(wallpaper => {
-        const presetItem = document.createElement('div');
-        presetItem.className = 'preset-item';
-        if ((wallpaper.type === 'default' && tempSettings.type === 'default') || 
-            (wallpaper.url === tempSettings.url && tempSettings.type !== 'custom')) {
-            presetItem.classList.add('selected');
+        if (!wallpaperByCategory[wallpaper.category]) {
+            wallpaperByCategory[wallpaper.category] = [];
         }
-        
-        if (wallpaper.type === 'default') {
-            presetItem.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
-        } else {
-            presetItem.style.backgroundImage = `url(${wallpaper.url})`;
-            presetItem.style.backgroundSize = 'cover';
-            presetItem.style.backgroundPosition = 'center';
-        }
-        
-        const presetLabel = document.createElement('span');
-        presetLabel.textContent = wallpaper.name;
-        presetItem.appendChild(presetLabel);
-        
-        presetItem.addEventListener('click', () => {
-            document.querySelectorAll('.preset-item').forEach(item => item.classList.remove('selected'));
-            presetItem.classList.add('selected');
-            if (wallpaper.type === 'default') {
-                tempSettings = { type: 'default', url: '', opacity: 1 };
-            } else {
-                tempSettings = { type: 'preset', url: wallpaper.url, opacity: 1 };
-            }
-            updatePreview(tempSettings);
-        });
-        
-        presetsContainer.appendChild(presetItem);
+        wallpaperByCategory[wallpaper.category].push(wallpaper);
     });
     
-    presetsSection.appendChild(presetsContainer);
+    // 生成分类壁纸展示
+    Object.keys(wallpaperByCategory).forEach(category => {
+        const categorySection = document.createElement('div');
+        categorySection.className = 'wallpaper-category';
+        
+        const categoryTitle = document.createElement('h5');
+        categoryTitle.textContent = category;
+        categorySection.appendChild(categoryTitle);
+        
+        const categoryContainer = document.createElement('div');
+        categoryContainer.className = 'category-container';
+        
+        wallpaperByCategory[category].forEach(wallpaper => {
+            const presetItem = document.createElement('div');
+            presetItem.className = 'preset-item';
+            if ((wallpaper.type === 'default' && tempSettings.type === 'default') || 
+                (wallpaper.url === tempSettings.url && tempSettings.type !== 'custom')) {
+                presetItem.classList.add('selected');
+            }
+            
+            const presetLabel = document.createElement('span');
+            presetLabel.textContent = wallpaper.name;
+            presetItem.appendChild(presetLabel);
+            
+            if (wallpaper.type === 'default') {
+                presetItem.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
+            } else {
+                // 实现懒加载
+                presetItem.setAttribute('data-src', wallpaper.url);
+                presetItem.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
+                presetItem.classList.add('lazy-wallpaper');
+                
+                // 为懒加载的壁纸添加错误处理
+                const img = new Image();
+                img.onerror = function() {
+                    // 加载失败时显示错误提示
+                    presetItem.style.background = 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 50%, #ef9a9a 100%)';
+                    presetLabel.textContent = `${wallpaper.name} (加载失败)`;
+                    presetLabel.style.color = '#c62828';
+                };
+                img.src = wallpaper.url;
+            }
+            
+            // 预览按钮
+            const previewButton = document.createElement('button');
+            previewButton.className = 'preview-button';
+            previewButton.textContent = '预览';
+            previewButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // 防止触发预设项的点击事件
+                showWallpaperPreview(wallpaper);
+            });
+            presetItem.appendChild(previewButton);
+            
+            presetItem.addEventListener('click', () => {
+                document.querySelectorAll('.preset-item').forEach(item => item.classList.remove('selected'));
+                presetItem.classList.add('selected');
+                if (wallpaper.type === 'default') {
+                    tempSettings = { type: 'default', url: '', opacity: 1 };
+                } else {
+                    tempSettings = { type: 'preset', url: wallpaper.url, opacity: 1 };
+                }
+                updatePreview(tempSettings);
+            });
+            
+            categoryContainer.appendChild(presetItem);
+        });
+        
+        categorySection.appendChild(categoryContainer);
+        presetsSection.appendChild(categorySection);
+    });
+    
     popup.appendChild(presetsSection);
     
     // 自定义上传区域
@@ -342,6 +449,109 @@ function createWallpaperPopup(currentSettings) {
     }
     
     updatePreview(tempSettings);
+    
+    // 初始化懒加载
+    initLazyLoading();
+}
+
+// 显示壁纸预览
+function showWallpaperPreview(wallpaper) {
+    if (wallpaper.type === 'default') {
+        alert('默认渐变背景无需预览');
+        return;
+    }
+    
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup wallpaper-preview-popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = `壁纸预览: ${wallpaper.name}`;
+    popup.appendChild(title);
+    
+    const previewContainer = document.createElement('div');
+    previewContainer.className = 'full-preview-container';
+    
+    const previewImg = document.createElement('img');
+    previewImg.className = 'preview-image';
+    previewImg.src = wallpaper.url;
+    previewImg.alt = wallpaper.name;
+    previewImg.style.maxWidth = '100%';
+    previewImg.style.maxHeight = '70vh';
+    previewImg.style.objectFit = 'contain';
+    
+    // 加载状态
+    const loadingIndicator = document.createElement('div');
+    loadingIndicator.className = 'loading-indicator';
+    loadingIndicator.textContent = '加载中...';
+    previewContainer.appendChild(loadingIndicator);
+    
+    previewImg.onload = function() {
+        loadingIndicator.style.display = 'none';
+    };
+    
+    previewImg.onerror = function() {
+        loadingIndicator.textContent = '加载失败';
+        loadingIndicator.style.color = '#c62828';
+    };
+    
+    previewContainer.appendChild(previewImg);
+    popup.appendChild(previewContainer);
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-button';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    buttonContainer.appendChild(closeButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+}
+
+// 初始化壁纸懒加载
+function initLazyLoading() {
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const wallpaperItem = entry.target;
+                    const src = wallpaperItem.getAttribute('data-src');
+                    if (src) {
+                        wallpaperItem.style.backgroundImage = `url(${src})`;
+                        wallpaperItem.style.backgroundSize = 'cover';
+                        wallpaperItem.style.backgroundPosition = 'center';
+                        wallpaperItem.classList.remove('lazy-wallpaper');
+                        observer.unobserve(wallpaperItem);
+                    }
+                }
+            });
+        }, {
+            rootMargin: '0px 0px 200px 0px'
+        });
+        
+        document.querySelectorAll('.lazy-wallpaper').forEach(item => {
+            observer.observe(item);
+        });
+    } else {
+        // 降级方案：直接加载所有壁纸
+        document.querySelectorAll('.lazy-wallpaper').forEach(item => {
+            const src = item.getAttribute('data-src');
+            if (src) {
+                item.style.backgroundImage = `url(${src})`;
+                item.style.backgroundSize = 'cover';
+                item.style.backgroundPosition = 'center';
+                item.classList.remove('lazy-wallpaper');
+            }
+        });
+    }
 }
 
 // 创建加减分弹出层
