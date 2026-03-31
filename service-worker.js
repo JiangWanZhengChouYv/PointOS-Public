@@ -1,11 +1,11 @@
 // Service Worker for 班级积分管理系统
 // 网络加速插件 - 基于 Service Worker 实现
-const CACHE_NAME = 'class-score-system-v1';
+const CACHE_NAME = 'class-score-system-v2';
 const ACCELERATION_CACHE_NAME = 'class-score-acceleration-cache-v1';
 const ASSETS_TO_CACHE = [
-  '积分.html',
-  'style.css',
-  'script.js'
+  'index.html',
+  'style.min.css',
+  'script.min.js'
 ];
 
 // 加速配置

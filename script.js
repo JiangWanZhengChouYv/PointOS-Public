@@ -44,12 +44,17 @@ function applyWallpaper(settings) {
         body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
         body.classList.remove('wallpaper-custom');
     } else {
-        body.style.backgroundImage = `url(${settings.url})`;
-        body.style.backgroundSize = 'cover';
-        body.style.backgroundPosition = 'center';
-        body.style.backgroundRepeat = 'no-repeat';
-        body.style.backgroundAttachment = 'fixed';
-        body.classList.add('wallpaper-custom');
+        // 实现图片懒加载
+        const img = new Image();
+        img.onload = function() {
+            body.style.backgroundImage = `url(${settings.url})`;
+            body.style.backgroundSize = 'cover';
+            body.style.backgroundPosition = 'center';
+            body.style.backgroundRepeat = 'no-repeat';
+            body.style.backgroundAttachment = 'fixed';
+            body.classList.add('wallpaper-custom');
+        };
+        img.src = settings.url;
     }
 }
 
