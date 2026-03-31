@@ -6,20 +6,20 @@ const STORAGE_KEY = 'classScoreSystem';
 const ACCELERATION_SETTINGS_KEY = 'classScoreSystem_acceleration';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
-// 预设壁纸 - 使用内置资源
+// 预设壁纸 - 使用可靠的CDN资源
 const PRESET_WALLPAPERS = [
     { id: 'default', name: '默认渐变', url: '', type: 'default', category: '系统' },
-    { id: 'nature1', name: '自然风光1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1506905925346.jpg', type: 'preset', category: '自然风景' },
-    { id: 'nature2', name: '自然风光2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1507525428034.jpg', type: 'preset', category: '自然风景' },
-    { id: 'nature3', name: '自然风光3', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1542273917363.jpg', type: 'preset', category: '自然风景' },
-    { id: 'geometric1', name: '几何图案1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1557683316973.jpg', type: 'preset', category: '几何图案' },
-    { id: 'geometric2', name: '几何图案2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1558618666855.jpg', type: 'preset', category: '几何图案' },
-    { id: 'school1', name: '图书馆', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1481627834876.jpg', type: 'preset', category: '校园环境' },
-    { id: 'school2', name: '教室', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1503676260728.jpg', type: 'preset', category: '校园环境' },
-    { id: 'abstract1', name: '抽象艺术1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1543836091931.jpg', type: 'preset', category: '抽象艺术' },
-    { id: 'abstract2', name: '抽象艺术2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1549880181560.jpg', type: 'preset', category: '抽象艺术' },
-    { id: 'minimal1', name: '极简风格1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1526304640581.jpg', type: 'preset', category: '极简风格' },
-    { id: 'minimal2', name: '极简风格2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1550684376efcb.jpg', type: 'preset', category: '极简风格' }
+    { id: 'nature1', name: '自然风光1', url: 'https://picsum.photos/id/10/1920/1080', type: 'preset', category: '自然风景' },
+    { id: 'nature2', name: '自然风光2', url: 'https://picsum.photos/id/11/1920/1080', type: 'preset', category: '自然风景' },
+    { id: 'nature3', name: '自然风光3', url: 'https://picsum.photos/id/12/1920/1080', type: 'preset', category: '自然风景' },
+    { id: 'geometric1', name: '几何图案1', url: 'https://picsum.photos/id/20/1920/1080', type: 'preset', category: '几何图案' },
+    { id: 'geometric2', name: '几何图案2', url: 'https://picsum.photos/id/21/1920/1080', type: 'preset', category: '几何图案' },
+    { id: 'school1', name: '图书馆', url: 'https://picsum.photos/id/30/1920/1080', type: 'preset', category: '校园环境' },
+    { id: 'school2', name: '教室', url: 'https://picsum.photos/id/31/1920/1080', type: 'preset', category: '校园环境' },
+    { id: 'abstract1', name: '抽象艺术1', url: 'https://picsum.photos/id/40/1920/1080', type: 'preset', category: '抽象艺术' },
+    { id: 'abstract2', name: '抽象艺术2', url: 'https://picsum.photos/id/41/1920/1080', type: 'preset', category: '抽象艺术' },
+    { id: 'minimal1', name: '极简风格1', url: 'https://picsum.photos/id/50/1920/1080', type: 'preset', category: '极简风格' },
+    { id: 'minimal2', name: '极简风格2', url: 'https://picsum.photos/id/51/1920/1080', type: 'preset', category: '极简风格' }
 ];
 
 // 初始化壁纸设置
