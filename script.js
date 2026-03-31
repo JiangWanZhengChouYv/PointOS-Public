@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.1.3
+// 版本: 1.1.4
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
