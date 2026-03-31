@@ -187,29 +187,7 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  if (event.data && event.data.type === 'UPDATE_CACHE') {
-    const { files } = event.data;
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return Promise.all(
-          files.map((file) => {
-            return fetch(file, { cache: 'no-cache' })
-              .then((response) => {
-                if (response.ok) {
-                  return cache.put(file, response);
-                }
-              });
-          })
-        );
-      })
-      .then(() => {
-        self.clients.matchAll().then((clients) => {
-          clients.forEach((client) => {
-            client.postMessage({ type: 'CACHE_UPDATED' });
-          });
-        });
-      });
-  }
+
   // 处理网络加速插件控制
   if (event.data && event.data.type === 'ACCELERATION_CONTROL') {
     const { enabled } = event.data;
