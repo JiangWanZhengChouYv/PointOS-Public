@@ -6,20 +6,20 @@ const STORAGE_KEY = 'classScoreSystem';
 const ACCELERATION_SETTINGS_KEY = 'classScoreSystem_acceleration';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
-// 预设壁纸
+// 预设壁纸 - 使用内置资源
 const PRESET_WALLPAPERS = [
     { id: 'default', name: '默认渐变', url: '', type: 'default', category: '系统' },
-    { id: 'nature1', name: '自然风光1', url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=1920&q=80', type: 'preset', category: '自然风景' },
-    { id: 'nature2', name: '自然风光2', url: 'https://images.unsplash.com/photo-1507525428034-b723cf96123e?w=1920&q=80', type: 'preset', category: '自然风景' },
-    { id: 'nature3', name: '自然风光3', url: 'https://images.unsplash.com/photo-1542273917363-3b1817f69a2d?w=1920&q=80', type: 'preset', category: '自然风景' },
-    { id: 'geometric1', name: '几何图案1', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80', type: 'preset', category: '几何图案' },
-    { id: 'geometric2', name: '几何图案2', url: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1920&q=80', type: 'preset', category: '几何图案' },
-    { id: 'school1', name: '图书馆', url: 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1920&q=80', type: 'preset', category: '校园环境' },
-    { id: 'school2', name: '教室', url: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=1920&q=80', type: 'preset', category: '校园环境' },
-    { id: 'abstract1', name: '抽象艺术1', url: 'https://images.unsplash.com/photo-1543836091-9310d27c6c7a?w=1920&q=80', type: 'preset', category: '抽象艺术' },
-    { id: 'abstract2', name: '抽象艺术2', url: 'https://images.unsplash.com/photo-1549880181-56a44cf4a9a5?w=1920&q=80', type: 'preset', category: '抽象艺术' },
-    { id: 'minimal1', name: '极简风格1', url: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=1920&q=80', type: 'preset', category: '极简风格' },
-    { id: 'minimal2', name: '极简风格2', url: 'https://images.unsplash.com/photo-1550684376-efcbd6e3f031?w=1920&q=80', type: 'preset', category: '极简风格' }
+    { id: 'nature1', name: '自然风光1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1506905925346.jpg', type: 'preset', category: '自然风景' },
+    { id: 'nature2', name: '自然风光2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1507525428034.jpg', type: 'preset', category: '自然风景' },
+    { id: 'nature3', name: '自然风光3', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1542273917363.jpg', type: 'preset', category: '自然风景' },
+    { id: 'geometric1', name: '几何图案1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1557683316973.jpg', type: 'preset', category: '几何图案' },
+    { id: 'geometric2', name: '几何图案2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1558618666855.jpg', type: 'preset', category: '几何图案' },
+    { id: 'school1', name: '图书馆', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1481627834876.jpg', type: 'preset', category: '校园环境' },
+    { id: 'school2', name: '教室', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1503676260728.jpg', type: 'preset', category: '校园环境' },
+    { id: 'abstract1', name: '抽象艺术1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1543836091931.jpg', type: 'preset', category: '抽象艺术' },
+    { id: 'abstract2', name: '抽象艺术2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1549880181560.jpg', type: 'preset', category: '抽象艺术' },
+    { id: 'minimal1', name: '极简风格1', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1526304640581.jpg', type: 'preset', category: '极简风格' },
+    { id: 'minimal2', name: '极简风格2', url: 'https://cdn.jsdelivr.net/gh/unsplash/photos@main/1550684376efcb.jpg', type: 'preset', category: '极简风格' }
 ];
 
 // 初始化壁纸设置
