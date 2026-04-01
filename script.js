@@ -986,11 +986,11 @@ function init() {
             wallpaperButton.textContent = '自定义壁纸';
             wallpaperButton.addEventListener('click', function() {
                 overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-                createWallpaperPopup(initWallpaperSettings());
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                    createWallpaperPopup(initWallpaperSettings());
+                }, 400);
             });
             buttonContainer.appendChild(wallpaperButton);
             
@@ -1008,10 +1008,10 @@ function init() {
                 link.click();
                 URL.revokeObjectURL(url);
                 overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                }, 400);
             });
             buttonContainer.appendChild(exportButton);
             
@@ -1044,10 +1044,10 @@ function init() {
                             alert('JSON文件解析失败！');
                         }
                         overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        document.body.removeChild(overlay);
-                    }, 400);
+                        popup.classList.add('closing');
+                        setTimeout(() => {
+                            document.body.removeChild(overlay);
+                        }, 400);
                     };
                     reader.readAsText(file);
                 });
