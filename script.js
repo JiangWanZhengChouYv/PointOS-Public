@@ -1104,6 +1104,10 @@ if ('serviceWorker' in navigator) {
                     newWorker.addEventListener('statechange', () => {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                             newWorker.postMessage({ type: 'SKIP_WAITING' });
+                            // 提示用户刷新页面
+                            if (confirm('系统有新版本可用，是否立即更新？')) {
+                                window.location.reload();
+                            }
                         }
                     });
                 });
@@ -1114,7 +1118,8 @@ if ('serviceWorker' in navigator) {
     // 监听Service Worker更新
     navigator.serviceWorker.addEventListener('controllerchange', () => {
         console.log('Service Worker updated');
-        // 可以在这里提示用户刷新页面
+        // 自动刷新页面
+        window.location.reload();
     });
 }
 
