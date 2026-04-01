@@ -26,18 +26,18 @@
 
 ### 方法一：直接访问
 
-1. 访问 GitHub Pages 部署版本：[班级积分管理系统](https://jiangwanzhengchouyv.github.io/PointOS/)
+1. 访问 GitHub Pages 部署版本：[班级积分管理系统](https://jiangwanzhengchouyv.github.io/PointOS-Public/)
 
 ### 方法二：本地部署
 
 1. 克隆仓库：
    ```bash
-   git clone https://github.com/jiangwanzhengchouyv/PointOS.git
+   git clone https://github.com/jiangwanzhengchouyv/PointOS-Public.git
    ```
 
 2. 进入项目目录：
    ```bash
-   cd PointOS
+   cd PointOS-Public
    ```
 
 3. 打开 `index.html` 文件即可使用
