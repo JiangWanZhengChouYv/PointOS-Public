@@ -1009,11 +1009,29 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('service-worker.js')
             .then(registration => {
                 console.log('Service Worker registered:', registration.scope);
+                
+                // 强制更新Service Worker
+                if (registration.waiting) {
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+                
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        }
+                    });
+                });
             })
             .catch(error => console.error('Service Worker registration failed:', error));
     });
     
-
+    // 监听Service Worker更新
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('Service Worker updated');
+        // 可以在这里提示用户刷新页面
+    });
 }
 
 // 页面加载完成后初始化
