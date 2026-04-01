@@ -40,11 +40,15 @@ body {
 header {
     background: var(--background-gradient);
     color: white;
-    text-align: center;
-    padding: 28px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
     box-shadow: var(--shadow-lg);
     position: relative;
     overflow: hidden;
+    flex-wrap: wrap;
+    gap: 16px;
 }
 
 header::before {
@@ -56,6 +60,7 @@ header::before {
     bottom: 0;
     background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     opacity: 0.3;
+    pointer-events: none;
 }
 
 header h1 {
@@ -65,6 +70,9 @@ header h1 {
     letter-spacing: 1px;
     position: relative;
     z-index: 1;
+    margin: 0;
+    flex: 1;
+    min-width: 200px;
 }
 
 main {
@@ -400,16 +408,17 @@ main {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 16px;
-    margin-top: 40px;
+    gap: 12px;
+    flex: 2;
+    min-width: 300px;
 }
 
 .reset-all, .add-all, .subtract-all, .settings, .evaluate {
-    padding: 14px 32px;
+    padding: 10px 20px;
     border: none;
     border-radius: var(--border-radius-md);
     cursor: pointer;
-    font-size: 1.05rem;
+    font-size: 0.9rem;
     font-weight: 600;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: var(--shadow-md);
@@ -643,6 +652,12 @@ footer p {
 }
 
 @media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        text-align: center;
+        padding: 16px 20px;
+    }
+    
     .score-container {
         gap: 20px;
     }
@@ -663,6 +678,16 @@ footer p {
     
     header h1 {
         font-size: 1.8rem;
+    }
+    
+    .global-controls {
+        gap: 10px;
+        min-width: 100%;
+    }
+    
+    .reset-all, .add-all, .subtract-all, .settings, .evaluate {
+        padding: 10px 16px;
+        font-size: 0.85rem;
     }
 }
 
@@ -686,12 +711,12 @@ footer p {
     }
     
     .global-controls {
-        gap: 12px;
+        gap: 8px;
     }
     
     .reset-all, .add-all, .subtract-all, .settings, .evaluate {
-        padding: 12px 24px;
-        font-size: 1rem;
+        padding: 8px 14px;
+        font-size: 0.8rem;
     }
 }
 
@@ -1091,4 +1116,51 @@ footer p {
         padding: 12px 20px;
         font-size: 0.95rem;
     }
+}
+
+/* 版本日志样式 */
+.version-log-popup {
+    max-width: 600px !important;
+    width: 95% !important;
+    max-height: 80vh !important;
+    overflow-y: auto !important;
+    text-align: left !important;
+}
+
+.version-log-content {
+    margin-bottom: 24px;
+}
+
+.version-section {
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.version-section:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.version-section h4 {
+    color: var(--primary-color);
+    margin-bottom: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.version-section ul {
+    margin-left: 24px;
+    margin-bottom: 0;
+}
+
+.version-section li {
+    margin-bottom: 8px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.version-section li:last-child {
+    margin-bottom: 0;
 }

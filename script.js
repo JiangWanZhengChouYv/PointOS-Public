@@ -1,10 +1,33 @@
 // 班级积分管理系统
-// 版本: 1.1.4
+// 版本: 1.2.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
 const ACCELERATION_SETTINGS_KEY = 'classScoreSystem_acceleration';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
+
+// 版本日志数据
+const VERSION_LOGS = [
+    {
+        version: '1.2.0',
+        date: '2026-04-01',
+        changes: [
+            '【新增功能】实现版本日志查看功能，清晰展示版本更新内容',
+            '【界面调整】调整功能键位置至屏幕左上角，提升操作便捷性',
+            '【界面优化】优化响应式布局，适配不同屏幕尺寸',
+            '【版本更新】更新系统版本至1.2.0'
+        ]
+    },
+    {
+        version: '1.1.4',
+        date: '2026-03-20',
+        changes: [
+            '【功能优化】改进壁纸加载机制，提升加载速度',
+            '【界面调整】优化壁纸预览大小，减少屏幕占用',
+            '【Bug修复】解决壁纸应用界面显示异常问题'
+        ]
+    }
+];
 
 // 预设壁纸 - 使用可靠的CDN资源
 const PRESET_WALLPAPERS = [
@@ -36,6 +59,59 @@ function initWallpaperSettings() {
 // 保存壁纸设置
 function saveWallpaperSettings(settings) {
     localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(settings));
+}
+
+// 显示版本日志
+function showVersionLog() {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup version-log-popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = '版本日志';
+    popup.appendChild(title);
+    
+    // 版本日志内容
+    const logContent = document.createElement('div');
+    logContent.className = 'version-log-content';
+    
+    VERSION_LOGS.forEach(version => {
+        const versionSection = document.createElement('div');
+        versionSection.className = 'version-section';
+        
+        const versionHeader = document.createElement('h4');
+        versionHeader.textContent = `版本 ${version.version} (${version.date})`;
+        versionSection.appendChild(versionHeader);
+        
+        const changesList = document.createElement('ul');
+        version.changes.forEach(change => {
+            const changeItem = document.createElement('li');
+            changeItem.textContent = change;
+            changesList.appendChild(changeItem);
+        });
+        versionSection.appendChild(changesList);
+        logContent.appendChild(versionSection);
+    });
+    
+    popup.appendChild(logContent);
+    
+    // 关闭按钮
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-button';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', () => {
+        document.body.removeChild(overlay);
+    });
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    buttonContainer.appendChild(closeButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
 }
 
 // 检测网络环境
@@ -912,7 +988,15 @@ function init() {
             });
             buttonContainer.appendChild(importButton);
             
-
+            // 版本日志
+            const versionLogButton = document.createElement('button');
+            versionLogButton.className = 'popup-button';
+            versionLogButton.textContent = '版本日志';
+            versionLogButton.addEventListener('click', function() {
+                document.body.removeChild(overlay);
+                showVersionLog();
+            });
+            buttonContainer.appendChild(versionLogButton);
             
             const cancelButton = document.createElement('button');
             cancelButton.className = 'popup-cancel';
