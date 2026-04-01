@@ -118,11 +118,7 @@ function showVersionLog() {
                     overlay.classList.add('closing');
                     popup.classList.add('closing');
                     setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                        document.body.removeChild(overlay);
                     }, 400);
                 }, 400);
             });
@@ -615,11 +611,7 @@ function showWallpaperPreview(wallpaper) {
                     overlay.classList.add('closing');
                     popup.classList.add('closing');
                     setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                        document.body.removeChild(overlay);
                     }, 400);
                 }, 400);
             });
@@ -836,11 +828,7 @@ function init() {
                     overlay.classList.add('closing');
                     popup.classList.add('closing');
                     setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                        document.body.removeChild(overlay);
                     }, 400);
                 });
                 buttonContainer.appendChild(button);
@@ -853,15 +841,7 @@ function init() {
                 overlay.classList.add('closing');
                 popup.classList.add('closing');
                 setTimeout(() => {
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-                    }, 400);
+                    document.body.removeChild(overlay);
                 }, 400);
             });
             
@@ -910,11 +890,7 @@ function init() {
                     overlay.classList.add('closing');
                     popup.classList.add('closing');
                     setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                        document.body.removeChild(overlay);
                     }, 400);
                 });
                 buttonContainer.appendChild(button);
@@ -927,15 +903,7 @@ function init() {
                 overlay.classList.add('closing');
                 popup.classList.add('closing');
                 setTimeout(() => {
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-                    }, 400);
+                    document.body.removeChild(overlay);
                 }, 400);
             });
             
@@ -1077,11 +1045,7 @@ function init() {
                         overlay.classList.add('closing');
                     popup.classList.add('closing');
                     setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+                        document.body.removeChild(overlay);
                     }, 400);
                     };
                     reader.readAsText(file);
@@ -1096,11 +1060,11 @@ function init() {
             versionLogButton.textContent = '版本日志';
             versionLogButton.addEventListener('click', function() {
                 overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-                showVersionLog();
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                    showVersionLog();
+                }, 400);
             });
             buttonContainer.appendChild(versionLogButton);
             
@@ -1111,15 +1075,7 @@ function init() {
                 overlay.classList.add('closing');
                 popup.classList.add('closing');
                 setTimeout(() => {
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-                    }, 400);
+                    document.body.removeChild(overlay);
                 }, 400);
             });
             
