@@ -714,8 +714,11 @@ footer p {
 
 /* 壁纸弹出层样式 */
 .wallpaper-popup {
-    max-width: 600px !important;
+    max-width: 90vw !important;
     width: 95% !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+    padding: 24px !important;
 }
 
 .wallpaper-popup h4 {
@@ -814,7 +817,7 @@ footer p {
 
 .category-container {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
     gap: 12px;
 }
 
