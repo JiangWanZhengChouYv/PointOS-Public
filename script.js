@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.2.0
+// 版本: 1.2.1
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -8,6 +8,16 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.2.1',
+        date: '2026-04-01',
+        changes: [
+            '【版本更新】更新系统版本至1.2.1',
+            '【界面优化】优化设置界面的弹出/关闭动画效果，实现平滑过渡',
+            '【界面优化】改进所有按钮触发的窗口弹出交互，确保动画流畅无卡顿',
+            '【响应式优化】保证在不同设备分辨率下均能保持一致的丝滑体验'
+        ]
+    },
     {
         version: '1.2.0',
         date: '2026-04-01',
@@ -102,8 +112,20 @@ function showVersionLog() {
     closeButton.className = 'popup-button';
     closeButton.textContent = '关闭';
     closeButton.addEventListener('click', () => {
-        document.body.removeChild(overlay);
-    });
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
+                }, 400);
+            });
     
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'popup-buttons';
@@ -487,7 +509,11 @@ function createWallpaperPopup(currentSettings) {
     saveButton.addEventListener('click', () => {
         saveWallpaperSettings(tempSettings);
         applyWallpaper(tempSettings);
-        document.body.removeChild(overlay);
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
     });
     buttonContainer.appendChild(saveButton);
     
@@ -583,8 +609,20 @@ function showWallpaperPreview(wallpaper) {
     closeButton.className = 'popup-button';
     closeButton.textContent = '关闭';
     closeButton.addEventListener('click', () => {
-        document.body.removeChild(overlay);
-    });
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
+                }, 400);
+            });
     buttonContainer.appendChild(closeButton);
     
     popup.appendChild(buttonContainer);
@@ -666,7 +704,11 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
             }
             if (inputElement) inputElement.value = scoreData.groups[group];
             
+            overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
             document.body.removeChild(overlay);
+        }, 400);
         });
         buttonContainer.appendChild(button);
     });
@@ -791,7 +833,15 @@ function init() {
                         }
                         if (inputElement) inputElement.value = scoreData.groups[i.toString()];
                     }
-                    document.body.removeChild(overlay);
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
                 });
                 buttonContainer.appendChild(button);
             });
@@ -799,7 +849,21 @@ function init() {
             const cancelButton = document.createElement('button');
             cancelButton.className = 'popup-cancel';
             cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => document.body.removeChild(overlay));
+            cancelButton.addEventListener('click', () => {
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
+                }, 400);
+            });
             
             popup.appendChild(buttonContainer);
             popup.appendChild(cancelButton);
@@ -843,7 +907,15 @@ function init() {
                         }
                         if (inputElement) inputElement.value = scoreData.groups[i.toString()];
                     }
-                    document.body.removeChild(overlay);
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
                 });
                 buttonContainer.appendChild(button);
             });
@@ -851,7 +923,21 @@ function init() {
             const cancelButton = document.createElement('button');
             cancelButton.className = 'popup-cancel';
             cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => document.body.removeChild(overlay));
+            cancelButton.addEventListener('click', () => {
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
+                }, 400);
+            });
             
             popup.appendChild(buttonContainer);
             popup.appendChild(cancelButton);
@@ -930,7 +1016,11 @@ function init() {
             wallpaperButton.className = 'popup-button';
             wallpaperButton.textContent = '自定义壁纸';
             wallpaperButton.addEventListener('click', function() {
-                document.body.removeChild(overlay);
+                overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
                 createWallpaperPopup(initWallpaperSettings());
             });
             buttonContainer.appendChild(wallpaperButton);
@@ -948,7 +1038,11 @@ function init() {
                 link.download = 'class-score-data.json';
                 link.click();
                 URL.revokeObjectURL(url);
-                document.body.removeChild(overlay);
+                overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
             });
             buttonContainer.appendChild(exportButton);
             
@@ -980,7 +1074,15 @@ function init() {
                         } catch (error) {
                             alert('JSON文件解析失败！');
                         }
-                        document.body.removeChild(overlay);
+                        overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
                     };
                     reader.readAsText(file);
                 });
@@ -993,7 +1095,11 @@ function init() {
             versionLogButton.className = 'popup-button';
             versionLogButton.textContent = '版本日志';
             versionLogButton.addEventListener('click', function() {
-                document.body.removeChild(overlay);
+                overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
                 showVersionLog();
             });
             buttonContainer.appendChild(versionLogButton);
@@ -1001,7 +1107,21 @@ function init() {
             const cancelButton = document.createElement('button');
             cancelButton.className = 'popup-cancel';
             cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => document.body.removeChild(overlay));
+            cancelButton.addEventListener('click', () => {
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    overlay.classList.add('closing');
+                    popup.classList.add('closing');
+                    setTimeout(() => {
+                        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+                    }, 400);
+                }, 400);
+            });
             
             popup.appendChild(buttonContainer);
             popup.appendChild(cancelButton);
