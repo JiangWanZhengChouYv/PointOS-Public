@@ -23,6 +23,16 @@ const accelerationConfig = {
   ]
 };
 
+// 缓存配置
+const cacheConfig = {
+  // 缓存过期时间（毫秒）
+  accelerationCacheExpiry: 24 * 60 * 60 * 1000, // 24小时
+  // 最大缓存大小（MB）
+  maxCacheSize: 50,
+  // 最大加速缓存条目数
+  maxAccelerationCacheEntries: 100
+};
+
 // 安装Service Worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -37,7 +47,7 @@ self.addEventListener('install', (event) => {
 
 // 激活Service Worker
 self.addEventListener('activate', (event) => {
-  const cacheWhitelist = [CACHE_NAME];
+  const cacheWhitelist = [CACHE_NAME, ACCELERATION_CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -47,9 +57,51 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    }).then(() => self.clients.claim())
+    })
+    .then(() => {
+      // 清理过期的加速缓存
+      return cleanupAccelerationCache();
+    })
+    .then(() => self.clients.claim())
   );
 });
+
+// 清理过期的加速缓存
+async function cleanupAccelerationCache() {
+  try {
+    const cache = await caches.open(ACCELERATION_CACHE_NAME);
+    const requests = await cache.keys();
+    
+    // 限制缓存条目数
+    if (requests.length > cacheConfig.maxAccelerationCacheEntries) {
+      // 删除最旧的缓存条目
+      const sortedRequests = requests.sort((a, b) => {
+        return new Date(a.headers.get('date') || 0) - new Date(b.headers.get('date') || 0);
+      });
+      const toDelete = sortedRequests.slice(0, requests.length - cacheConfig.maxAccelerationCacheEntries);
+      
+      await Promise.all(
+        toDelete.map(request => cache.delete(request))
+      );
+    }
+    
+    // 删除过期的缓存
+    const now = Date.now();
+    await Promise.all(
+      requests.map(async (request) => {
+        const response = await cache.match(request);
+        if (response) {
+          const cachedTime = response.headers.get('sw-cached-time');
+          if (cachedTime && (now - parseInt(cachedTime)) > cacheConfig.accelerationCacheExpiry) {
+            await cache.delete(request);
+          }
+        }
+      })
+    );
+  } catch (error) {
+    console.error('Error cleaning up acceleration cache:', error);
+  }
+}
 
 // 检查是否需要加速
 function shouldAccelerate(request) {
@@ -82,7 +134,14 @@ self.addEventListener('fetch', (event) => {
           // 先检查加速缓存
           const cachedResponse = await caches.match(event.request, { cacheName: ACCELERATION_CACHE_NAME });
           if (cachedResponse) {
-            return cachedResponse;
+            // 检查缓存是否过期
+            const cachedTime = cachedResponse.headers.get('sw-cached-time');
+            if (cachedTime && (Date.now() - parseInt(cachedTime)) <= cacheConfig.accelerationCacheExpiry) {
+              return cachedResponse;
+            } else {
+              // 缓存过期，删除并重新请求
+              await caches.open(ACCELERATION_CACHE_NAME).then(cache => cache.delete(event.request));
+            }
           }
           
           // 发起网络请求，添加优化
@@ -102,9 +161,21 @@ self.addEventListener('fetch', (event) => {
             
             // 缓存响应
             if (response && response.status === 200) {
-              const responseToCache = response.clone();
+              // 克隆响应并添加缓存时间戳
+              const responseToCache = new Response(response.body, response);
+              const headers = new Headers(responseToCache.headers);
+              headers.set('sw-cached-time', Date.now().toString());
+              const cachedResponse = new Response(responseToCache.body, {
+                status: responseToCache.status,
+                statusText: responseToCache.statusText,
+                headers: headers
+              });
+              
               const cache = await caches.open(ACCELERATION_CACHE_NAME);
-              await cache.put(event.request, responseToCache);
+              await cache.put(event.request, cachedResponse);
+              
+              // 定期清理缓存
+              cleanupAccelerationCache();
             }
             
             return response;
@@ -150,7 +221,12 @@ self.addEventListener('fetch', (event) => {
                 const responseToCache = networkResponse.clone();
                 const cache = await caches.open(CACHE_NAME);
                 await cache.put(event.request, responseToCache);
-                // 存储哈希值
+                // 存储哈希值（使用Map的限制大小）
+                if (resourceHashes.size > 100) {
+                  // 移除最旧的条目
+                  const firstKey = resourceHashes.keys().next().value;
+                  resourceHashes.delete(firstKey);
+                }
                 resourceHashes.set(event.request.url, contentHash);
                 
                 // 通知客户端缓存已更新

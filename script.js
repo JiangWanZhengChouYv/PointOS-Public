@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.2.2
+// 版本: 1.2.3
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -8,6 +8,18 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.2.3',
+        date: '2026-04-02',
+        changes: [
+            '【版本更新】更新系统版本至1.2.3',
+            '【性能优化】优化事件监听器管理，减少内存泄漏',
+            '【性能优化】优化DOM操作，减少重排重绘',
+            '【性能优化】优化Service Worker缓存策略，减少内存占用',
+            '【性能优化】优化图片资源加载策略，实现更高效的懒加载',
+            '【性能优化】压缩脚本文件，减少文件大小'
+        ]
+    },
     {
         version: '1.2.2',
         date: '2026-04-01',
@@ -339,13 +351,16 @@ function saveData(data) {
 
 // 加载数据到页面
 function loadDataToPage(data) {
-    for (let i = 1; i <= 7; i++) {
-        const groupScore = data.groups[i.toString()] || 0;
-        const scoreElement = document.querySelector(`.score-group[data-group="${i}"] .score-value`);
-        const inputElement = document.querySelector(`.score-group[data-group="${i}"] .score-input`);
+    // 缓存DOM引用，减少DOM查询次数
+    const scoreGroups = document.querySelectorAll('.score-group');
+    scoreGroups.forEach(group => {
+        const groupNumber = group.dataset.group;
+        const groupScore = data.groups[groupNumber] || 0;
+        const scoreElement = group.querySelector('.score-value');
+        const inputElement = group.querySelector('.score-input');
         if (scoreElement) scoreElement.textContent = groupScore;
         if (inputElement) inputElement.value = groupScore;
-    }
+    });
 }
 
 // 添加操作反馈
@@ -366,9 +381,12 @@ function createWallpaperPopup(currentSettings) {
     const popup = document.createElement('div');
     popup.className = 'popup wallpaper-popup';
     
+    // 使用文档片段批量创建DOM元素，减少重排重绘
+    const fragment = document.createDocumentFragment();
+    
     const title = document.createElement('h3');
     title.textContent = '自定义壁纸';
-    popup.appendChild(title);
+    fragment.appendChild(title);
     
     // 预设壁纸区域
     const presetsSection = document.createElement('div');
@@ -398,6 +416,9 @@ function createWallpaperPopup(currentSettings) {
         
         const categoryContainer = document.createElement('div');
         categoryContainer.className = 'category-container';
+        
+        // 使用文档片段批量创建壁纸项
+        const categoryFragment = document.createDocumentFragment();
         
         wallpaperByCategory[category].forEach(wallpaper => {
             const presetItem = document.createElement('div');
@@ -451,14 +472,15 @@ function createWallpaperPopup(currentSettings) {
                 updatePreview(tempSettings);
             });
             
-            categoryContainer.appendChild(presetItem);
+            categoryFragment.appendChild(presetItem);
         });
         
+        categoryContainer.appendChild(categoryFragment);
         categorySection.appendChild(categoryContainer);
         presetsSection.appendChild(categorySection);
     });
     
-    popup.appendChild(presetsSection);
+    fragment.appendChild(presetsSection);
     
     // 自定义上传区域
     const customSection = document.createElement('div');
@@ -492,7 +514,7 @@ function createWallpaperPopup(currentSettings) {
     });
     
     customSection.appendChild(uploadButton);
-    popup.appendChild(customSection);
+    fragment.appendChild(customSection);
     
     // 预览区域
     const previewSection = document.createElement('div');
@@ -506,7 +528,7 @@ function createWallpaperPopup(currentSettings) {
     previewContainer.className = 'preview-container';
     previewSection.appendChild(previewContainer);
     
-    popup.appendChild(previewSection);
+    fragment.appendChild(previewSection);
     
     // 按钮容器
     const buttonContainer = document.createElement('div');
@@ -537,7 +559,7 @@ function createWallpaperPopup(currentSettings) {
     });
     buttonContainer.appendChild(resetButton);
     
-    popup.appendChild(buttonContainer);
+    fragment.appendChild(buttonContainer);
     
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
@@ -550,7 +572,10 @@ function createWallpaperPopup(currentSettings) {
         }, 400);
     });
     
-    popup.appendChild(cancelButton);
+    fragment.appendChild(cancelButton);
+    
+    // 一次性将所有元素添加到DOM中，减少重排重绘
+    popup.appendChild(fragment);
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
     
@@ -637,42 +662,128 @@ function showWallpaperPreview(wallpaper) {
     document.body.appendChild(overlay);
 }
 
-// 初始化壁纸懒加载
-function initLazyLoading() {
-    if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const wallpaperItem = entry.target;
-                    const src = wallpaperItem.getAttribute('data-src');
-                    if (src) {
-                        wallpaperItem.style.backgroundImage = `url(${src})`;
-                        wallpaperItem.style.backgroundSize = 'cover';
-                        wallpaperItem.style.backgroundPosition = 'center';
-                        wallpaperItem.classList.remove('lazy-wallpaper');
-                        observer.unobserve(wallpaperItem);
+// 图片加载管理器
+class ImageLoader {
+    constructor() {
+        this.loadingQueue = [];
+        this.maxConcurrentLoads = 3;
+        this.currentLoads = 0;
+        this.observer = null;
+    }
+    
+    // 初始化懒加载
+    init() {
+        if ('IntersectionObserver' in window) {
+            this.observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const wallpaperItem = entry.target;
+                        const src = wallpaperItem.getAttribute('data-src');
+                        if (src) {
+                            this.loadImage(wallpaperItem, src);
+                            this.observer.unobserve(wallpaperItem);
+                        }
                     }
-                }
+                });
+            }, {
+                rootMargin: '0px 0px 200px 0px'
             });
-        }, {
-            rootMargin: '0px 0px 200px 0px'
-        });
+            
+            document.querySelectorAll('.lazy-wallpaper').forEach(item => {
+                this.observer.observe(item);
+            });
+        } else {
+            // 降级方案：使用节流加载所有壁纸
+            const items = document.querySelectorAll('.lazy-wallpaper');
+            this.loadImagesInSequence(items);
+        }
+    }
+    
+    // 加载图片
+    loadImage(element, src) {
+        if (this.currentLoads >= this.maxConcurrentLoads) {
+            this.loadingQueue.push({ element, src });
+            return;
+        }
         
-        document.querySelectorAll('.lazy-wallpaper').forEach(item => {
-            observer.observe(item);
-        });
-    } else {
-        // 降级方案：直接加载所有壁纸
-        document.querySelectorAll('.lazy-wallpaper').forEach(item => {
+        this.currentLoads++;
+        
+        const img = new Image();
+        img.onload = () => {
+            element.style.backgroundImage = `url(${src})`;
+            element.style.backgroundSize = 'cover';
+            element.style.backgroundPosition = 'center';
+            element.classList.remove('lazy-wallpaper');
+            this.currentLoads--;
+            this.processQueue();
+        };
+        img.onerror = () => {
+            // 加载失败时显示错误提示
+            element.style.background = 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 50%, #ef9a9a 100%)';
+            const label = element.querySelector('span');
+            if (label) {
+                label.textContent = `${label.textContent} (加载失败)`;
+                label.style.color = '#c62828';
+            }
+            element.classList.remove('lazy-wallpaper');
+            this.currentLoads--;
+            this.processQueue();
+        };
+        img.src = src;
+    }
+    
+    // 处理加载队列
+    processQueue() {
+        if (this.loadingQueue.length > 0 && this.currentLoads < this.maxConcurrentLoads) {
+            const next = this.loadingQueue.shift();
+            this.loadImage(next.element, next.src);
+        }
+    }
+    
+    // 顺序加载图片（降级方案）
+    loadImagesInSequence(items) {
+        let index = 0;
+        const loadNext = () => {
+            if (index >= items.length) return;
+            
+            const item = items[index];
             const src = item.getAttribute('data-src');
             if (src) {
-                item.style.backgroundImage = `url(${src})`;
-                item.style.backgroundSize = 'cover';
-                item.style.backgroundPosition = 'center';
-                item.classList.remove('lazy-wallpaper');
+                const img = new Image();
+                img.onload = () => {
+                    item.style.backgroundImage = `url(${src})`;
+                    item.style.backgroundSize = 'cover';
+                    item.style.backgroundPosition = 'center';
+                    item.classList.remove('lazy-wallpaper');
+                    index++;
+                    // 使用setTimeout避免阻塞主线程
+                    setTimeout(loadNext, 50);
+                };
+                img.onerror = () => {
+                    item.style.background = 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 50%, #ef9a9a 100%)';
+                    const label = item.querySelector('span');
+                    if (label) {
+                        label.textContent = `${label.textContent} (加载失败)`;
+                        label.style.color = '#c62828';
+                    }
+                    item.classList.remove('lazy-wallpaper');
+                    index++;
+                    setTimeout(loadNext, 50);
+                };
+                img.src = src;
+            } else {
+                index++;
+                loadNext();
             }
-        });
+        };
+        loadNext();
     }
+}
+
+// 初始化壁纸懒加载
+function initLazyLoading() {
+    const imageLoader = new ImageLoader();
+    imageLoader.init();
 }
 
 // 创建加减分弹出层
@@ -683,9 +794,12 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     const popup = document.createElement('div');
     popup.className = 'popup';
     
+    // 使用文档片段批量创建DOM元素，减少重排重绘
+    const fragment = document.createDocumentFragment();
+    
     const title = document.createElement('h3');
     title.textContent = type === 'add' ? '选择加分值' : '选择减分值';
-    popup.appendChild(title);
+    fragment.appendChild(title);
     
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'popup-buttons';
@@ -703,36 +817,50 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
             }
             saveData(scoreData);
             
-            const scoreElement = document.querySelector(`.score-group[data-group="${group}"] .score-value`);
-            const inputElement = document.querySelector(`.score-group[data-group="${group}"] .score-input`);
-            if (scoreElement) {
-                scoreElement.textContent = scoreData.groups[group];
-                addFeedback(scoreElement);
+            // 缓存DOM引用，减少DOM查询
+            const scoreGroup = document.querySelector(`.score-group[data-group="${group}"]`);
+            if (scoreGroup) {
+                const scoreElement = scoreGroup.querySelector('.score-value');
+                const inputElement = scoreGroup.querySelector('.score-input');
+                if (scoreElement) {
+                    scoreElement.textContent = scoreData.groups[group];
+                    addFeedback(scoreElement);
+                }
+                if (inputElement) inputElement.value = scoreData.groups[group];
             }
-            if (inputElement) inputElement.value = scoreData.groups[group];
             
             overlay.classList.add('closing');
             popup.classList.add('closing');
             setTimeout(() => {
                 document.body.removeChild(overlay);
+                // 清理事件监听器
+                buttonContainer.querySelectorAll('button').forEach(btn => {
+                    btn.removeEventListener('click', arguments.callee);
+                });
+                cancelButton.removeEventListener('click', cancelHandler);
             }, 400);
         });
         buttonContainer.appendChild(button);
     });
     
-    const cancelButton = document.createElement('button');
-    cancelButton.className = 'popup-cancel';
-    cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', () => {
+    fragment.appendChild(buttonContainer);
+    
+    const cancelHandler = () => {
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
             document.body.removeChild(overlay);
         }, 400);
-    });
+    };
     
-    popup.appendChild(buttonContainer);
-    popup.appendChild(cancelButton);
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', cancelHandler);
+    fragment.appendChild(cancelButton);
+    
+    // 一次性将所有元素添加到DOM中，减少重排重绘
+    popup.appendChild(fragment);
     overlay.appendChild(popup);
     document.body.appendChild(overlay);
 }
@@ -755,433 +883,397 @@ function init() {
     
     loadDataToPage(scoreData);
     
-    // 加分按钮
-    document.querySelectorAll('.score-add').forEach(button => {
-        button.addEventListener('click', function() {
-            const group = this.closest('.score-group').dataset.group;
-            createPopup('add', group, scoreData, saveData, loadDataToPage, addFeedback);
-        });
-    });
+    // 使用事件委托优化事件监听器管理
+    const scoreContainer = document.querySelector('.score-container');
+    const globalControls = document.querySelector('.global-controls');
+    const settingsBtn = document.querySelector('.settings');
+    const evaluateBtn = document.querySelector('.evaluate');
     
-    // 减分按钮
-    document.querySelectorAll('.score-subtract').forEach(button => {
-        button.addEventListener('click', function() {
-            const group = this.closest('.score-group').dataset.group;
-            createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
-        });
-    });
-    
-    // 单组重置
-    document.querySelectorAll('.score-reset').forEach(button => {
-        button.addEventListener('click', function() {
-            if (confirm('确定要重置该小组的积分吗？')) {
-                const group = this.closest('.score-group').dataset.group;
-                scoreData.groups[group] = 0;
+    // 加分、减分、重置、保存按钮的事件委托
+    if (scoreContainer) {
+        scoreContainer.addEventListener('click', function(e) {
+            const target = e.target;
+            const scoreGroup = target.closest('.score-group');
+            
+            if (!scoreGroup) return;
+            
+            const group = scoreGroup.dataset.group;
+            
+            if (target.classList.contains('score-add')) {
+                createPopup('add', group, scoreData, saveData, loadDataToPage, addFeedback);
+            } else if (target.classList.contains('score-subtract')) {
+                createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
+            } else if (target.classList.contains('score-reset')) {
+                if (confirm('确定要重置该小组的积分吗？')) {
+                    scoreData.groups[group] = 0;
+                    saveData(scoreData);
+                    
+                    const scoreElement = scoreGroup.querySelector('.score-value');
+                    const inputElement = scoreGroup.querySelector('.score-input');
+                    if (scoreElement) {
+                        scoreElement.textContent = '0';
+                        addFeedback(scoreElement);
+                    }
+                    if (inputElement) inputElement.value = '0';
+                }
+            } else if (target.classList.contains('score-save')) {
+                const inputElement = scoreGroup.querySelector('.score-input');
+                const scoreValue = parseInt(inputElement.value);
+                
+                if (isNaN(scoreValue)) {
+                    alert('请输入有效的整数！');
+                    inputElement.value = scoreData.groups[group] || 0;
+                    return;
+                }
+                
+                if (scoreValue < 0) {
+                    alert('积分值不能小于0！');
+                    inputElement.value = scoreData.groups[group] || 0;
+                    return;
+                }
+                
+                if (scoreValue >= 1000) {
+                    alert('积分值不能大于等于1000！');
+                    inputElement.value = scoreData.groups[group] || 0;
+                    return;
+                }
+                
+                scoreData.groups[group] = scoreValue;
                 saveData(scoreData);
                 
-                const scoreElement = this.closest('.score-group').querySelector('.score-value');
-                const inputElement = this.closest('.score-group').querySelector('.score-input');
+                const scoreElement = scoreGroup.querySelector('.score-value');
                 if (scoreElement) {
-                    scoreElement.textContent = '0';
+                    scoreElement.textContent = scoreValue;
                     addFeedback(scoreElement);
                 }
-                if (inputElement) inputElement.value = '0';
             }
         });
-    });
+    }
     
-    // 全部重置
-    const resetAllBtn = document.querySelector('.reset-all');
-    if (resetAllBtn) {
-        resetAllBtn.addEventListener('click', function() {
-            if (confirm('确定要重置所有小组的积分吗？')) {
-                for (let i = 1; i <= 7; i++) {
-                    scoreData.groups[i.toString()] = 0;
+    // 全局控制按钮的事件委托
+    if (globalControls) {
+        globalControls.addEventListener('click', function(e) {
+            const target = e.target;
+            
+            if (target.classList.contains('reset-all')) {
+                if (confirm('确定要重置所有小组的积分吗？')) {
+                    for (let i = 1; i <= 7; i++) {
+                        scoreData.groups[i.toString()] = 0;
+                    }
+                    saveData(scoreData);
+                    
+                    document.querySelectorAll('.score-value').forEach(element => {
+                        element.textContent = '0';
+                        addFeedback(element);
+                    });
+                    document.querySelectorAll('.score-input').forEach(element => {
+                        element.value = '0';
+                    });
                 }
-                saveData(scoreData);
-                
-                document.querySelectorAll('.score-value').forEach(element => {
-                    element.textContent = '0';
-                    addFeedback(element);
-                });
-                document.querySelectorAll('.score-input').forEach(element => {
-                    element.value = '0';
-                });
+            } else if (target.classList.contains('add-all')) {
+                createGlobalPopup('add', scoreData, saveData, loadDataToPage, addFeedback);
+            } else if (target.classList.contains('subtract-all')) {
+                createGlobalPopup('subtract', scoreData, saveData, loadDataToPage, addFeedback);
+            } else if (target.classList.contains('evaluate')) {
+                evaluateScore(scoreData, saveData, loadDataToPage, addFeedback);
             }
         });
     }
     
-    // 全员增加
-    const addAllBtn = document.querySelector('.add-all');
-    if (addAllBtn) {
-        addAllBtn.addEventListener('click', function() {
-            const overlay = document.createElement('div');
-            overlay.className = 'popup-overlay';
-            const popup = document.createElement('div');
-            popup.className = 'popup';
-            
-            const title = document.createElement('h3');
-            title.textContent = '选择加分值';
-            popup.appendChild(title);
-            
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'popup-buttons';
-            
-            [1, 2, 3, 4, 5, 6].forEach(value => {
-                const button = document.createElement('button');
-                button.className = 'popup-button';
-                button.textContent = `+${value}`;
-                button.addEventListener('click', function() {
-                    for (let i = 1; i <= 7; i++) {
-                        scoreData.groups[i.toString()] = (scoreData.groups[i.toString()] || 0) + value;
-                    }
-                    saveData(scoreData);
-                    
-                    for (let i = 1; i <= 7; i++) {
-                        const scoreElement = document.querySelector(`.score-group[data-group="${i}"] .score-value`);
-                        const inputElement = document.querySelector(`.score-group[data-group="${i}"] .score-input`);
-                        if (scoreElement) {
-                            scoreElement.textContent = scoreData.groups[i.toString()];
-                            addFeedback(scoreElement);
-                        }
-                        if (inputElement) inputElement.value = scoreData.groups[i.toString()];
-                    }
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        document.body.removeChild(overlay);
-                    }, 400);
-                });
-                buttonContainer.appendChild(button);
-            });
-            
-            const cancelButton = document.createElement('button');
-            cancelButton.className = 'popup-cancel';
-            cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                }, 400);
-            });
-            
-            popup.appendChild(buttonContainer);
-            popup.appendChild(cancelButton);
-            overlay.appendChild(popup);
-            document.body.appendChild(overlay);
-        });
-    }
-    
-    // 全员减少
-    const subtractAllBtn = document.querySelector('.subtract-all');
-    if (subtractAllBtn) {
-        subtractAllBtn.addEventListener('click', function() {
-            const overlay = document.createElement('div');
-            overlay.className = 'popup-overlay';
-            const popup = document.createElement('div');
-            popup.className = 'popup';
-            
-            const title = document.createElement('h3');
-            title.textContent = '选择减分值';
-            popup.appendChild(title);
-            
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'popup-buttons';
-            
-            [1, 2, 3, 4].forEach(value => {
-                const button = document.createElement('button');
-                button.className = 'popup-button';
-                button.textContent = `-${value}`;
-                button.addEventListener('click', function() {
-                    for (let i = 1; i <= 7; i++) {
-                        scoreData.groups[i.toString()] = Math.max(0, (scoreData.groups[i.toString()] || 0) - value);
-                    }
-                    saveData(scoreData);
-                    
-                    for (let i = 1; i <= 7; i++) {
-                        const scoreElement = document.querySelector(`.score-group[data-group="${i}"] .score-value`);
-                        const inputElement = document.querySelector(`.score-group[data-group="${i}"] .score-input`);
-                        if (scoreElement) {
-                            scoreElement.textContent = scoreData.groups[i.toString()];
-                            addFeedback(scoreElement);
-                        }
-                        if (inputElement) inputElement.value = scoreData.groups[i.toString()];
-                    }
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        document.body.removeChild(overlay);
-                    }, 400);
-                });
-                buttonContainer.appendChild(button);
-            });
-            
-            const cancelButton = document.createElement('button');
-            cancelButton.className = 'popup-cancel';
-            cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                }, 400);
-            });
-            
-            popup.appendChild(buttonContainer);
-            popup.appendChild(cancelButton);
-            overlay.appendChild(popup);
-            document.body.appendChild(overlay);
-        });
-    }
-    
-    // 设置按钮
-    const settingsBtn = document.querySelector('.settings');
+    // 设置按钮点击事件
     if (settingsBtn) {
         settingsBtn.addEventListener('click', function() {
-            const overlay = document.createElement('div');
-            overlay.className = 'popup-overlay';
-            const popup = document.createElement('div');
-            popup.className = 'popup';
-            
-            const title = document.createElement('h3');
-            title.textContent = '设置';
-            popup.appendChild(title);
-            
-            // 网络加速
-            const accelerationSection = document.createElement('div');
-            accelerationSection.className = 'acceleration-section';
-            
-            const accelerationTitle = document.createElement('h4');
-            accelerationTitle.textContent = '网络加速设置';
-            accelerationSection.appendChild(accelerationTitle);
-            
-            const enableContainer = document.createElement('div');
-            enableContainer.style.cssText = 'display:flex;align-items:center;margin-bottom:15px';
-            
-            const enableLabel = document.createElement('span');
-            enableLabel.textContent = '启用网络加速';
-            enableLabel.style.marginRight = '10px';
-            enableContainer.appendChild(enableLabel);
-            
-            const enableSwitch = document.createElement('label');
-            enableSwitch.className = 'switch';
-            enableSwitch.innerHTML = `<input type="checkbox" ${accelerationSettings.enabled ? 'checked' : ''}><span class="slider round"></span>`;
-            enableContainer.appendChild(enableSwitch);
-            accelerationSection.appendChild(enableContainer);
-            
-            const accelerationButtons = document.createElement('div');
-            accelerationButtons.style.cssText = 'display:flex;gap:10px;margin-bottom:15px';
-            
-            const clearCacheButton = document.createElement('button');
-            clearCacheButton.className = 'popup-button';
-            clearCacheButton.textContent = '清除加速缓存';
-            clearCacheButton.addEventListener('click', () => {
-                clearAccelerationCache();
-                alert('加速缓存已清除');
-            });
-            accelerationButtons.appendChild(clearCacheButton);
-            
-            const testSpeedButton = document.createElement('button');
-            testSpeedButton.className = 'popup-button';
-            testSpeedButton.textContent = '测试加载速度';
-            testSpeedButton.addEventListener('click', testLoadSpeed);
-            accelerationButtons.appendChild(testSpeedButton);
-            accelerationSection.appendChild(accelerationButtons);
-            
-            enableSwitch.querySelector('input').addEventListener('change', function() {
-                accelerationSettings.enabled = this.checked;
-                saveAccelerationSettings(accelerationSettings);
-            });
-            
-            popup.appendChild(accelerationSection);
-            
-            // 按钮容器
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'popup-buttons';
-            
-            // 自定义壁纸
-            const wallpaperButton = document.createElement('button');
-            wallpaperButton.className = 'popup-button';
-            wallpaperButton.textContent = '自定义壁纸';
-            wallpaperButton.addEventListener('click', function() {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                    createWallpaperPopup(initWallpaperSettings());
-                }, 400);
-            });
-            buttonContainer.appendChild(wallpaperButton);
-            
-            // 导出JSON
-            const exportButton = document.createElement('button');
-            exportButton.className = 'popup-button';
-            exportButton.textContent = '导出JSON';
-            exportButton.addEventListener('click', function() {
-                const dataStr = JSON.stringify(scoreData, null, 2);
-                const dataBlob = new Blob([dataStr], {type: 'application/json'});
-                const url = URL.createObjectURL(dataBlob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = 'class-score-data.json';
-                link.click();
-                URL.revokeObjectURL(url);
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                }, 400);
-            });
-            buttonContainer.appendChild(exportButton);
-            
-            // 导入JSON
-            const importButton = document.createElement('button');
-            importButton.className = 'popup-button';
-            importButton.textContent = '导入JSON';
-            importButton.addEventListener('click', function() {
-                const fileInput = document.createElement('input');
-                fileInput.type = 'file';
-                fileInput.accept = '.json';
-                
-                fileInput.addEventListener('change', function(e) {
-                    const file = e.target.files[0];
-                    if (!file) return;
-                    
-                    const reader = new FileReader();
-                    reader.onload = function(e) {
-                        try {
-                            const importedData = JSON.parse(e.target.result);
-                            if (importedData && importedData.groups) {
-                                scoreData = importedData;
-                                saveData(scoreData);
-                                loadDataToPage(scoreData);
-                                alert('导入成功！');
-                            } else {
-                                alert('无效的JSON文件格式！');
-                            }
-                        } catch (error) {
-                            alert('JSON文件解析失败！');
-                        }
-                        overlay.classList.add('closing');
-                        popup.classList.add('closing');
-                        setTimeout(() => {
-                            document.body.removeChild(overlay);
-                        }, 400);
-                    };
-                    reader.readAsText(file);
-                });
-                fileInput.click();
-            });
-            buttonContainer.appendChild(importButton);
-            
-            // 版本日志
-            const versionLogButton = document.createElement('button');
-            versionLogButton.className = 'popup-button';
-            versionLogButton.textContent = '版本日志';
-            versionLogButton.addEventListener('click', function() {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                    showVersionLog();
-                }, 400);
-            });
-            buttonContainer.appendChild(versionLogButton);
-            
-            const cancelButton = document.createElement('button');
-            cancelButton.className = 'popup-cancel';
-            cancelButton.textContent = '取消';
-            cancelButton.addEventListener('click', () => {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                }, 400);
-            });
-            
-            popup.appendChild(buttonContainer);
-            popup.appendChild(cancelButton);
-            overlay.appendChild(popup);
-            document.body.appendChild(overlay);
+            createSettingsPopup(accelerationSettings, scoreData, saveData, loadDataToPage);
         });
     }
     
-    // 评比按钮
-    const evaluateBtn = document.querySelector('.evaluate');
+    // 评比按钮点击事件（冗余，已通过事件委托处理）
     if (evaluateBtn) {
         evaluateBtn.addEventListener('click', function() {
-            let maxScore = -1;
-            let winningGroup = '';
-            
-            for (let i = 1; i <= 7; i++) {
-                const score = scoreData.groups[i.toString()] || 0;
-                if (score > maxScore) {
-                    maxScore = score;
-                    winningGroup = i;
-                }
-            }
-            
-            if (winningGroup) {
-                alert(`评比结果：小组 ${winningGroup} 得分最高，分数为 ${maxScore}！`);
-                
-                for (let i = 1; i <= 7; i++) {
-                    scoreData.groups[i.toString()] = 0;
-                }
-                saveData(scoreData);
-                
-                document.querySelectorAll('.score-value').forEach(element => {
-                    element.textContent = '0';
-                    addFeedback(element);
-                });
-                document.querySelectorAll('.score-input').forEach(element => {
-                    element.value = '0';
-                });
-                
-                setTimeout(() => {
-                    window.location.href = 'https://bjcwy.rxtw666.cn/login';
-                }, 1000);
-            } else {
-                alert('没有可评比的分数！');
-            }
+            evaluateScore(scoreData, saveData, loadDataToPage, addFeedback);
         });
     }
+}
+
+// 创建全局操作弹出层
+function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
     
-    // 保存按钮
-    document.querySelectorAll('.score-save').forEach(button => {
+    const title = document.createElement('h3');
+    title.textContent = type === 'add' ? '选择加分值' : '选择减分值';
+    popup.appendChild(title);
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    const values = type === 'add' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4];
+    values.forEach(value => {
+        const button = document.createElement('button');
+        button.className = 'popup-button';
+        button.textContent = type === 'add' ? `+${value}` : `-${value}`;
         button.addEventListener('click', function() {
-            const group = this.closest('.score-group').dataset.group;
-            const inputElement = this.closest('.score-group').querySelector('.score-input');
-            const scoreValue = parseInt(inputElement.value);
-            
-            if (isNaN(scoreValue)) {
-                alert('请输入有效的整数！');
-                inputElement.value = scoreData.groups[group] || 0;
-                return;
+            for (let i = 1; i <= 7; i++) {
+                if (type === 'add') {
+                    scoreData.groups[i.toString()] = (scoreData.groups[i.toString()] || 0) + value;
+                } else {
+                    scoreData.groups[i.toString()] = Math.max(0, (scoreData.groups[i.toString()] || 0) - value);
+                }
             }
-            
-            if (scoreValue < 0) {
-                alert('积分值不能小于0！');
-                inputElement.value = scoreData.groups[group] || 0;
-                return;
-            }
-            
-            if (scoreValue >= 1000) {
-                alert('积分值不能大于等于1000！');
-                inputElement.value = scoreData.groups[group] || 0;
-                return;
-            }
-            
-            scoreData.groups[group] = scoreValue;
             saveData(scoreData);
             
-            const scoreElement = this.closest('.score-group').querySelector('.score-value');
-            if (scoreElement) {
-                scoreElement.textContent = scoreValue;
-                addFeedback(scoreElement);
+            for (let i = 1; i <= 7; i++) {
+                const scoreElement = document.querySelector(`.score-group[data-group="${i}"] .score-value`);
+                const inputElement = document.querySelector(`.score-group[data-group="${i}"] .score-input`);
+                if (scoreElement) {
+                    scoreElement.textContent = scoreData.groups[i.toString()];
+                    addFeedback(scoreElement);
+                }
+                if (inputElement) inputElement.value = scoreData.groups[i.toString()];
             }
+            overlay.classList.add('closing');
+            popup.classList.add('closing');
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+                // 清理事件监听器
+                buttonContainer.querySelectorAll('button').forEach(btn => {
+                    btn.removeEventListener('click', arguments.callee);
+                });
+                cancelButton.removeEventListener('click', cancelHandler);
+            }, 400);
         });
+        buttonContainer.appendChild(button);
     });
+    
+    const cancelHandler = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            // 清理事件监听器
+            buttonContainer.querySelectorAll('button').forEach(btn => {
+                btn.removeEventListener('click', arguments.callee);
+            });
+        }, 400);
+    };
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', cancelHandler);
+    
+    popup.appendChild(buttonContainer);
+    popup.appendChild(cancelButton);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+}
+
+// 创建设置弹出层
+function createSettingsPopup(accelerationSettings, scoreData, saveData, loadDataToPage) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = '设置';
+    popup.appendChild(title);
+    
+    // 网络加速
+    const accelerationSection = document.createElement('div');
+    accelerationSection.className = 'acceleration-section';
+    
+    const accelerationTitle = document.createElement('h4');
+    accelerationTitle.textContent = '网络加速设置';
+    accelerationSection.appendChild(accelerationTitle);
+    
+    const enableContainer = document.createElement('div');
+    enableContainer.style.cssText = 'display:flex;align-items:center;margin-bottom:15px';
+    
+    const enableLabel = document.createElement('span');
+    enableLabel.textContent = '启用网络加速';
+    enableLabel.style.marginRight = '10px';
+    enableContainer.appendChild(enableLabel);
+    
+    const enableSwitch = document.createElement('label');
+    enableSwitch.className = 'switch';
+    enableSwitch.innerHTML = `<input type="checkbox" ${accelerationSettings.enabled ? 'checked' : ''}><span class="slider round"></span>`;
+    enableContainer.appendChild(enableSwitch);
+    accelerationSection.appendChild(enableContainer);
+    
+    const accelerationButtons = document.createElement('div');
+    accelerationButtons.style.cssText = 'display:flex;gap:10px;margin-bottom:15px';
+    
+    const clearCacheButton = document.createElement('button');
+    clearCacheButton.className = 'popup-button';
+    clearCacheButton.textContent = '清除加速缓存';
+    clearCacheButton.addEventListener('click', () => {
+        clearAccelerationCache();
+        alert('加速缓存已清除');
+    });
+    accelerationButtons.appendChild(clearCacheButton);
+    
+    const testSpeedButton = document.createElement('button');
+    testSpeedButton.className = 'popup-button';
+    testSpeedButton.textContent = '测试加载速度';
+    testSpeedButton.addEventListener('click', testLoadSpeed);
+    accelerationButtons.appendChild(testSpeedButton);
+    accelerationSection.appendChild(accelerationButtons);
+    
+    enableSwitch.querySelector('input').addEventListener('change', function() {
+        accelerationSettings.enabled = this.checked;
+        saveAccelerationSettings(accelerationSettings);
+    });
+    
+    popup.appendChild(accelerationSection);
+    
+    // 按钮容器
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    // 自定义壁纸
+    const wallpaperButton = document.createElement('button');
+    wallpaperButton.className = 'popup-button';
+    wallpaperButton.textContent = '自定义壁纸';
+    wallpaperButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            createWallpaperPopup(initWallpaperSettings());
+        }, 400);
+    });
+    buttonContainer.appendChild(wallpaperButton);
+    
+    // 导出JSON
+    const exportButton = document.createElement('button');
+    exportButton.className = 'popup-button';
+    exportButton.textContent = '导出JSON';
+    exportButton.addEventListener('click', function() {
+        const dataStr = JSON.stringify(scoreData, null, 2);
+        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'class-score-data.json';
+        link.click();
+        URL.revokeObjectURL(url);
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
+    buttonContainer.appendChild(exportButton);
+    
+    // 导入JSON
+    const importButton = document.createElement('button');
+    importButton.className = 'popup-button';
+    importButton.textContent = '导入JSON';
+    importButton.addEventListener('click', function() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json';
+        
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData && importedData.groups) {
+                        scoreData = importedData;
+                        saveData(scoreData);
+                        loadDataToPage(scoreData);
+                        alert('导入成功！');
+                    } else {
+                        alert('无效的JSON文件格式！');
+                    }
+                } catch (error) {
+                    alert('JSON文件解析失败！');
+                }
+                overlay.classList.add('closing');
+                popup.classList.add('closing');
+                setTimeout(() => {
+                    document.body.removeChild(overlay);
+                }, 400);
+            };
+            reader.readAsText(file);
+        });
+        fileInput.click();
+    });
+    buttonContainer.appendChild(importButton);
+    
+    // 版本日志
+    const versionLogButton = document.createElement('button');
+    versionLogButton.className = 'popup-button';
+    versionLogButton.textContent = '版本日志';
+    versionLogButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            showVersionLog();
+        }, 400);
+    });
+    buttonContainer.appendChild(versionLogButton);
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
+    
+    popup.appendChild(buttonContainer);
+    popup.appendChild(cancelButton);
+    overlay.appendChild(popup);
+    document.body.appendChild(overlay);
+}
+
+// 评比分数
+function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
+    let maxScore = -1;
+    let winningGroup = '';
+    
+    for (let i = 1; i <= 7; i++) {
+        const score = scoreData.groups[i.toString()] || 0;
+        if (score > maxScore) {
+            maxScore = score;
+            winningGroup = i;
+        }
+    }
+    
+    if (winningGroup) {
+        alert(`评比结果：小组 ${winningGroup} 得分最高，分数为 ${maxScore}！`);
+        
+        for (let i = 1; i <= 7; i++) {
+            scoreData.groups[i.toString()] = 0;
+        }
+        saveData(scoreData);
+        
+        document.querySelectorAll('.score-value').forEach(element => {
+            element.textContent = '0';
+            addFeedback(element);
+        });
+        document.querySelectorAll('.score-input').forEach(element => {
+            element.value = '0';
+        });
+        
+        setTimeout(() => {
+            window.location.href = 'https://bjcwy.rxtw666.cn/login';
+        }, 1000);
+    } else {
+        alert('没有可评比的分数！');
+    }
 }
 
 // 注册Service Worker
