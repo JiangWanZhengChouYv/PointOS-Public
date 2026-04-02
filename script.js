@@ -1238,6 +1238,19 @@ if ('serviceWorker' in navigator) {
     } catch (error) {
         console.error('Service Worker controllerchange error:', error);
     }
+    
+    // 监听缓存更新通知
+    try {
+        navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'CACHE_UPDATED') {
+                console.log('Cache updated for:', event.data.url);
+                // 自动刷新页面以加载最新内容
+                window.location.reload();
+            }
+        });
+    } catch (error) {
+        console.error('Service Worker message error:', error);
+    }
 }
 
 // 页面加载完成后初始化
