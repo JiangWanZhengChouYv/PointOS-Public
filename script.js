@@ -113,16 +113,12 @@ function showVersionLog() {
     closeButton.className = 'popup-button';
     closeButton.textContent = '关闭';
     closeButton.addEventListener('click', () => {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        document.body.removeChild(overlay);
-                    }, 400);
-                }, 400);
-            });
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
     
     const buttonContainer = document.createElement('div');
     buttonContainer.className = 'popup-buttons';
@@ -262,12 +258,20 @@ function testLoadSpeed() {
             setTimeout(() => {
                 const startTime = performance.now();
                 fetch('https://jiangwanzhengchouyv.github.io/PointOS/updates/update-info.json?test=' + Date.now())
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
                     .then(() => {
                         const endTime = performance.now();
                         resolve(endTime - startTime);
                     })
-                    .catch(reject);
+                    .catch(error => {
+                        console.error('测试无加速时出错:', error);
+                        reject(error);
+                    });
             }, 1000);
         });
     }
@@ -279,12 +283,20 @@ function testLoadSpeed() {
             setTimeout(() => {
                 const startTime = performance.now();
                 fetch('https://jiangwanzhengchouyv.github.io/PointOS/updates/update-info.json?test=' + Date.now())
-                    .then(response => response.json())
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
                     .then(() => {
                         const endTime = performance.now();
                         resolve(endTime - startTime);
                     })
-                    .catch(reject);
+                    .catch(error => {
+                        console.error('测试有加速时出错:', error);
+                        reject(error);
+                    });
             }, 1000);
         });
     }
@@ -530,7 +542,13 @@ function createWallpaperPopup(currentSettings) {
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
     cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', () => document.body.removeChild(overlay));
+    cancelButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
     
     popup.appendChild(cancelButton);
     overlay.appendChild(popup);
@@ -606,16 +624,12 @@ function showWallpaperPreview(wallpaper) {
     closeButton.className = 'popup-button';
     closeButton.textContent = '关闭';
     closeButton.addEventListener('click', () => {
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    overlay.classList.add('closing');
-                    popup.classList.add('closing');
-                    setTimeout(() => {
-                        document.body.removeChild(overlay);
-                    }, 400);
-                }, 400);
-            });
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
     buttonContainer.appendChild(closeButton);
     
     popup.appendChild(buttonContainer);
@@ -698,10 +712,10 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
             if (inputElement) inputElement.value = scoreData.groups[group];
             
             overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
+            popup.classList.add('closing');
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+            }, 400);
         });
         buttonContainer.appendChild(button);
     });
@@ -709,7 +723,13 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
     cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', () => document.body.removeChild(overlay));
+    cancelButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
     
     popup.appendChild(buttonContainer);
     popup.appendChild(cancelButton);
@@ -1167,37 +1187,57 @@ function init() {
 // 注册Service Worker
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('service-worker.js')
-            .then(registration => {
-                console.log('Service Worker registered:', registration.scope);
-                
-                // 强制更新Service Worker
-                if (registration.waiting) {
-                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                }
-                
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                            // 提示用户刷新页面
-                            if (confirm('系统有新版本可用，是否立即更新？')) {
-                                window.location.reload();
+        try {
+            navigator.serviceWorker.register('service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker registered:', registration.scope);
+                    
+                    // 强制更新Service Worker
+                    if (registration.waiting) {
+                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                    }
+                    
+                    registration.addEventListener('updatefound', () => {
+                        try {
+                            const newWorker = registration.installing;
+                            if (newWorker) {
+                                newWorker.addEventListener('statechange', () => {
+                                    try {
+                                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                            // 提示用户刷新页面
+                                            if (confirm('系统有新版本可用，是否立即更新？')) {
+                                                window.location.reload();
+                                            }
+                                        }
+                                    } catch (error) {
+                                        console.error('Service Worker statechange error:', error);
+                                    }
+                                });
                             }
+                        } catch (error) {
+                            console.error('Service Worker updatefound error:', error);
                         }
                     });
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
                 });
-            })
-            .catch(error => console.error('Service Worker registration failed:', error));
+        } catch (error) {
+            console.error('Service Worker registration error:', error);
+        }
     });
     
     // 监听Service Worker更新
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service Worker updated');
-        // 自动刷新页面
-        window.location.reload();
-    });
+    try {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            console.log('Service Worker updated');
+            // 自动刷新页面
+            window.location.reload();
+        });
+    } catch (error) {
+        console.error('Service Worker controllerchange error:', error);
+    }
 }
 
 // 页面加载完成后初始化
