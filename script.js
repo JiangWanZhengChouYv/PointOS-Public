@@ -17,7 +17,8 @@ const VERSION_LOGS = [
             '【性能优化】优化DOM操作，减少重排重绘',
             '【性能优化】优化Service Worker缓存策略，减少内存占用',
             '【性能优化】优化图片资源加载策略，实现更高效的懒加载',
-            '【性能优化】压缩脚本文件，减少文件大小'
+            '【性能优化】压缩脚本文件，减少文件大小',
+            '【Bug修复】修复弹窗打开时鼠标滚轮导致背景页面滚动的问题'
         ]
     },
     {
@@ -138,6 +139,20 @@ function showVersionLog() {
     
     popup.appendChild(buttonContainer);
     overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
     document.body.appendChild(overlay);
 }
 
@@ -577,6 +592,20 @@ function createWallpaperPopup(currentSettings) {
     // 一次性将所有元素添加到DOM中，减少重排重绘
     popup.appendChild(fragment);
     overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
     document.body.appendChild(overlay);
     
     function updatePreview(settings) {
@@ -862,6 +891,20 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     // 一次性将所有元素添加到DOM中，减少重排重绘
     popup.appendChild(fragment);
     overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
     document.body.appendChild(overlay);
 }
 
@@ -1067,6 +1110,20 @@ function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedbac
     popup.appendChild(buttonContainer);
     popup.appendChild(cancelButton);
     overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
     document.body.appendChild(overlay);
 }
 
@@ -1236,6 +1293,20 @@ function createSettingsPopup(accelerationSettings, scoreData, saveData, loadData
     popup.appendChild(buttonContainer);
     popup.appendChild(cancelButton);
     overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
     document.body.appendChild(overlay);
 }
 
