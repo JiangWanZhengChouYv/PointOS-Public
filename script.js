@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.2.3
+// 版本: 1.2.4
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -919,12 +919,138 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
 // 监听Service Worker消息
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('message', function(event) {
-        if (event.data && event.data.type === 'CACHE_UPDATED') {
-            console.log('缓存已更新:', event.data.url);
-            // 强制刷新页面，确保使用最新代码
-            window.location.reload();
+        if (event.data && event.data.type === 'SW_UPDATED') {
+            console.log('Service Worker 已更新:', event.data.message);
+            // 显示更新提示弹窗
+            showUpdateNotification(event.data.message);
         }
     });
+}
+
+// 显示更新提示弹窗
+function showUpdateNotification(message) {
+    // 检查是否已经显示过更新提示
+    if (document.getElementById('update-notification')) {
+        return;
+    }
+    
+    const notification = document.createElement('div');
+    notification.id = 'update-notification';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        z-index: 10000;
+        max-width: 350px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    const title = document.createElement('h4');
+    title.textContent = '🎉 发现新版本';
+    title.style.cssText = 'margin: 0 0 10px 0; font-size: 18px; font-weight: 600;';
+    
+    const content = document.createElement('p');
+    content.textContent = message || '系统有新版本可用，建议立即更新以获得最佳体验。';
+    content.style.cssText = 'margin: 0 0 15px 0; font-size: 14px; line-height: 1.5; opacity: 0.95;';
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 10px;';
+    
+    const updateButton = document.createElement('button');
+    updateButton.textContent = '立即更新';
+    updateButton.style.cssText = `
+        background: white;
+        color: #667eea;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.2s;
+        flex: 1;
+    `;
+    updateButton.onmouseover = () => {
+        updateButton.style.transform = 'translateY(-2px)';
+        updateButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+    };
+    updateButton.onmouseout = () => {
+        updateButton.style.transform = 'translateY(0)';
+        updateButton.style.boxShadow = 'none';
+    };
+    updateButton.onclick = () => {
+        window.location.reload();
+    };
+    
+    const laterButton = document.createElement('button');
+    laterButton.textContent = '稍后更新';
+    laterButton.style.cssText = `
+        background: rgba(255,255,255,0.2);
+        color: white;
+        border: 1px solid rgba(255,255,255,0.3);
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.2s;
+        flex: 1;
+    `;
+    laterButton.onmouseover = () => {
+        laterButton.style.background = 'rgba(255,255,255,0.3)';
+    };
+    laterButton.onmouseout = () => {
+        laterButton.style.background = 'rgba(255,255,255,0.2)';
+    };
+    laterButton.onclick = () => {
+        notification.style.animation = 'slideOut 0.3s ease-in forwards';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    };
+    
+    buttonContainer.appendChild(updateButton);
+    buttonContainer.appendChild(laterButton);
+    
+    notification.appendChild(title);
+    notification.appendChild(content);
+    notification.appendChild(buttonContainer);
+    
+    // 添加动画样式
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(notification);
 }
 
 // 主函数

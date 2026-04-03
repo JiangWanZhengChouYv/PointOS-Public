@@ -1,6 +1,6 @@
 // Service Worker for 班级积分管理系统
 // 网络加速插件 - 基于 Service Worker 实现
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `class-score-system-${CACHE_VERSION}`;
 const ACCELERATION_CACHE_NAME = 'class-score-acceleration-cache';
 const ASSETS_TO_CACHE = [
@@ -42,7 +42,19 @@ self.addEventListener('install', (event) => {
         console.log('Opened cache');
         return cache.addAll(ASSETS_TO_CACHE);
       })
-      .then(() => self.skipWaiting())
+      .then(() => {
+        // 通知所有客户端有新的Service Worker正在等待
+        self.clients.matchAll().then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ 
+              type: 'SW_UPDATED',
+              message: '新版本已就绪，请刷新页面以使用最新版本'
+            });
+          });
+        });
+        // 立即激活新的Service Worker
+        return self.skipWaiting();
+      })
   );
 });
 
@@ -190,16 +202,6 @@ self.addEventListener('fetch', (event) => {
               const responseToCache = networkResponse.clone();
               const cache = await caches.open(CACHE_NAME);
               await cache.put(event.request, responseToCache);
-              
-              // 通知客户端缓存已更新
-              self.clients.matchAll().then((clients) => {
-                clients.forEach((client) => {
-                  client.postMessage({ 
-                    type: 'CACHE_UPDATED',
-                    url: event.request.url
-                  });
-                });
-              });
             }
             
             return networkResponse;
