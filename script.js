@@ -916,6 +916,17 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
 
 
 
+// 监听Service Worker消息
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', function(event) {
+        if (event.data && event.data.type === 'CACHE_UPDATED') {
+            console.log('缓存已更新:', event.data.url);
+            // 强制刷新页面，确保使用最新代码
+            window.location.reload();
+        }
+    });
+}
+
 // 主函数
 function init() {
     const wallpaperSettings = initWallpaperSettings();
