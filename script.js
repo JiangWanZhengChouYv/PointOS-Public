@@ -1347,18 +1347,182 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     }
 }
 
+// 版本号存储键名
+const VERSION_STORAGE_KEY = 'classScoreSystem_version';
+const UPDATE_DEFERRED_KEY = 'classScoreSystem_updateDeferred';
+
+// 当前版本号
+let currentAppVersion = '1.2.3';
+let updateNotificationShown = false;
+
+// 检查版本更新
+async function checkVersionUpdate() {
+    try {
+        const response = await fetch('version.json', { cache: 'no-store' });
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        const serverVersion = data.version;
+        const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+        
+        // 保存当前版本号
+        if (!storedVersion) {
+            localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
+            return;
+        }
+        
+        // 比较版本号
+        if (serverVersion !== storedVersion && !updateNotificationShown) {
+            updateNotificationShown = true;
+            showUpdateNotification(serverVersion, storedVersion);
+        }
+    } catch (error) {
+        console.error('Version check failed:', error);
+    }
+}
+
+// 显示版本更新提示
+function showUpdateNotification(newVersion, currentVersion) {
+    // 检查用户是否选择稍后更新
+    const deferred = localStorage.getItem(UPDATE_DEFERRED_KEY);
+    if (deferred) {
+        const deferredTime = parseInt(deferred);
+        // 如果用户在1小时内选择过稍后更新，不再提示
+        if (Date.now() - deferredTime < 60 * 60 * 1000) {
+            return;
+        }
+    }
+    
+    // 创建更新提示条
+    const updateBar = document.createElement('div');
+    updateBar.id = 'update-notification-bar';
+    updateBar.innerHTML = `
+        <div class="update-notification-content">
+            <span class="update-message">🎉 发现新版本 ${newVersion}（当前版本 ${currentVersion}）</span>
+            <div class="update-buttons">
+                <button class="update-btn update-now" onclick="handleUpdateNow()">立即更新</button>
+                <button class="update-btn update-later" onclick="handleUpdateLater()">稍后更新</button>
+            </div>
+        </div>
+    `;
+    
+    // 添加样式
+    updateBar.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 20px;
+        z-index: 10000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        animation: slideDown 0.3s ease-out;
+    `;
+    
+    // 添加动画样式
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideDown {
+            from { transform: translateY(-100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(0); }
+            to { transform: translateY(-100%); }
+        }
+        .update-notification-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .update-message {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .update-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .update-btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .update-now {
+            background: white;
+            color: #667eea;
+            font-weight: 600;
+        }
+        .update-now:hover {
+            background: #f0f0f0;
+            transform: scale(1.05);
+        }
+        .update-later {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+        .update-later:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(updateBar);
+    
+    // 为body添加顶部padding以避免内容被遮挡
+    document.body.style.paddingTop = '50px';
+}
+
+// 处理立即更新
+function handleUpdateNow() {
+    // 清除缓存并刷新
+    if ('caches' in window) {
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => caches.delete(cacheName))
+            );
+        }).then(() => {
+            localStorage.removeItem(UPDATE_DEFERRED_KEY);
+            window.location.reload(true);
+        });
+    } else {
+        localStorage.removeItem(UPDATE_DEFERRED_KEY);
+        window.location.reload(true);
+    }
+}
+
+// 处理稍后更新
+function handleUpdateLater() {
+    // 记录用户选择稍后更新的时间
+    localStorage.setItem(UPDATE_DEFERRED_KEY, Date.now().toString());
+    
+    // 隐藏提示条
+    const updateBar = document.getElementById('update-notification-bar');
+    if (updateBar) {
+        updateBar.style.animation = 'slideUp 0.3s ease-out';
+        setTimeout(() => {
+            updateBar.remove();
+            document.body.style.paddingTop = '0';
+        }, 300);
+    }
+}
+
 // 注册Service Worker
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
+        // 检查版本更新
+        checkVersionUpdate();
+        
         try {
             navigator.serviceWorker.register('service-worker.js')
                 .then(registration => {
                     console.log('Service Worker registered:', registration.scope);
-                    
-                    // 强制更新Service Worker
-                    if (registration.waiting) {
-                        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                    }
                     
                     registration.addEventListener('updatefound', () => {
                         try {
@@ -1367,11 +1531,22 @@ if ('serviceWorker' in navigator) {
                                 newWorker.addEventListener('statechange', () => {
                                     try {
                                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                            newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                            // 提示用户刷新页面
-                                            if (confirm('系统有新版本可用，是否立即更新？')) {
-                                                window.location.reload();
-                                            }
+                                            // 新版本的 Service Worker 已安装，等待用户确认
+                                            console.log('New Service Worker installed, waiting for user confirmation');
+                                            
+                                            // 获取新版本号
+                                            fetch('version.json', { cache: 'no-store' })
+                                                .then(response => response.json())
+                                                .then(data => {
+                                                    const newVersion = data.version;
+                                                    const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+                                                    
+                                                    if (newVersion !== storedVersion && !updateNotificationShown) {
+                                                        updateNotificationShown = true;
+                                                        showUpdateNotification(newVersion, storedVersion || '未知');
+                                                    }
+                                                })
+                                                .catch(err => console.error('Failed to get version:', err));
                                         }
                                     } catch (error) {
                                         console.error('Service Worker statechange error:', error);
@@ -1391,24 +1566,22 @@ if ('serviceWorker' in navigator) {
         }
     });
     
-    // 监听Service Worker更新
-    try {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            console.log('Service Worker updated');
-            // 自动刷新页面
-            window.location.reload();
-        });
-    } catch (error) {
-        console.error('Service Worker controllerchange error:', error);
-    }
-    
-    // 监听缓存更新通知
+    // 监听Service Worker消息
     try {
         navigator.serviceWorker.addEventListener('message', (event) => {
+            if (event.data && event.data.type === 'VERSION_UPDATED') {
+                console.log('Version updated to:', event.data.version);
+                const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
+                
+                if (event.data.version !== storedVersion && !updateNotificationShown) {
+                    updateNotificationShown = true;
+                    showUpdateNotification(event.data.version, storedVersion || '未知');
+                }
+            }
+            
             if (event.data && event.data.type === 'CACHE_UPDATED') {
                 console.log('Cache updated for:', event.data.url);
-                // 自动刷新页面以加载最新内容
-                window.location.reload();
+                // 不再自动刷新，等待用户手动更新
             }
         });
     } catch (error) {

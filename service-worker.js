@@ -1,11 +1,13 @@
 // Service Worker for 班级积分管理系统
 // 网络加速插件 - 基于 Service Worker 实现
-const CACHE_NAME = 'class-score-system';
+const CACHE_VERSION = 'v2';
+const CACHE_NAME = `class-score-system-${CACHE_VERSION}`;
 const ACCELERATION_CACHE_NAME = 'class-score-acceleration-cache';
 const ASSETS_TO_CACHE = [
   'index.html',
   'style.min.css',
-  'script.min.js'
+  'script.min.js',
+  'version.json'
 ];
 
 // 加速配置
@@ -33,6 +35,9 @@ const cacheConfig = {
   maxAccelerationCacheEntries: 100
 };
 
+// 当前版本号
+let currentVersion = null;
+
 // 安装Service Worker
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -40,6 +45,16 @@ self.addEventListener('install', (event) => {
       .then((cache) => {
         console.log('Opened cache');
         return cache.addAll(ASSETS_TO_CACHE);
+      })
+      .then(() => {
+        // 获取版本号
+        return fetch('version.json', { cache: 'no-store' })
+          .then(response => response.json())
+          .then(data => {
+            currentVersion = data.version;
+            console.log('Current version:', currentVersion);
+          })
+          .catch(err => console.error('Failed to load version:', err));
       })
       .then(() => self.skipWaiting())
   );
@@ -110,8 +125,6 @@ function shouldAccelerate(request) {
   return accelerationConfig.加速域名.some(domain => url.hostname.includes(domain));
 }
 
-
-
 // 生成内容哈希
 async function generateContentHash(content) {
   const encoder = new TextEncoder();
@@ -123,6 +136,163 @@ async function generateContentHash(content) {
 
 // 存储资源哈希
 const resourceHashes = new Map();
+
+// 获取版本号
+async function getVersionFromResponse(response) {
+  try {
+    const responseClone = response.clone();
+    const data = await responseClone.json();
+    return data.version;
+  } catch (error) {
+    return null;
+  }
+}
+
+// 文件大小比较更新器
+class FileSizeUpdater {
+  constructor() {
+    this.logger = new FileSizeLogger();
+  }
+
+  /**
+   * 获取远程文件大小（通过 HTTP HEAD 请求）
+   * @param {string} url - 文件 URL
+   * @returns {Promise<number>} 文件大小（字节）
+   */
+  async getRemoteFileSize(url) {
+    try {
+      const response = await fetch(url, {
+        method: 'HEAD',
+        headers: {
+          'Accept': '*/*'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const contentLength = response.headers.get('content-length');
+      if (!contentLength) {
+        throw new Error('Content-Length 头信息不存在');
+      }
+
+      return parseInt(contentLength, 10);
+    } catch (error) {
+      this.logger.error(`获取远程文件大小失败: ${url}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * 比较两个文件大小
+   * @param {number} sourceSize - 源文件大小（字节）
+   * @param {number} targetSize - 目标文件大小（字节）
+   * @returns {Object} 比较结果
+   */
+  compareFileSizes(sourceSize, targetSize) {
+    try {
+      const result = {
+        sourceSize,
+        targetSize,
+        sourceBigger: sourceSize > targetSize,
+        targetBigger: targetSize > sourceSize,
+        equal: sourceSize === targetSize
+      };
+
+      this.logger.info(`文件大小比较结果: 源文件 ${sourceSize} 字节, 目标文件 ${targetSize} 字节`, result);
+      return result;
+    } catch (error) {
+      this.logger.error('文件大小比较失败', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 决定是否执行更新
+   * @param {number} sourceSize - 源文件大小（字节）
+   * @param {number} targetSize - 目标文件大小（字节）
+   * @returns {boolean} 是否执行更新
+   */
+  shouldUpdate(sourceSize, targetSize) {
+    const comparison = this.compareFileSizes(sourceSize, targetSize);
+    const shouldUpdate = comparison.sourceBigger;
+    
+    this.logger.info(`更新决策: ${shouldUpdate ? '执行更新' : '不执行更新'}`);
+    return shouldUpdate;
+  }
+
+  /**
+   * 执行完整的文件大小比较和更新决策
+   * @param {string} sourceUrl - 源文件 URL
+   * @param {string} targetUrl - 目标文件 URL
+   * @returns {Promise<{shouldUpdate: boolean, comparison: Object}>} 更新决策和比较结果
+   */
+  async execute(sourceUrl, targetUrl) {
+    try {
+      const startTime = performance.now();
+      
+      this.logger.info(`开始文件大小比较: 源文件 ${sourceUrl}, 目标文件 ${targetUrl}`);
+      
+      const [sourceSize, targetSize] = await Promise.all([
+        this.getRemoteFileSize(sourceUrl),
+        this.getRemoteFileSize(targetUrl)
+      ]);
+      
+      const comparison = this.compareFileSizes(sourceSize, targetSize);
+      const shouldUpdate = this.shouldUpdate(sourceSize, targetSize);
+      
+      const endTime = performance.now();
+      this.logger.info(`文件大小比较完成，耗时 ${(endTime - startTime).toFixed(2)}ms`);
+      
+      return {
+        shouldUpdate,
+        comparison
+      };
+    } catch (error) {
+      this.logger.error('执行文件大小比较失败', error);
+      throw error;
+    }
+  }
+}
+
+/**
+ * 文件大小比较日志记录器
+ */
+class FileSizeLogger {
+  /**
+   * 记录信息日志
+   * @param {string} message - 日志消息
+   * @param {*} data - 附加数据
+   */
+  info(message, data = null) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [INFO] FileSizeUpdater: ${message}`;
+    if (data) {
+      console.log(logMessage, data);
+    } else {
+      console.log(logMessage);
+    }
+  }
+
+  /**
+   * 记录错误日志
+   * @param {string} message - 日志消息
+   * @param {Error} error - 错误对象
+   */
+  error(message, error = null) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [ERROR] FileSizeUpdater: ${message}`;
+    if (error) {
+      console.error(logMessage, error);
+    } else {
+      console.error(logMessage);
+    }
+  }
+}
+
+// 创建文件大小更新器实例
+const fileSizeUpdater = new FileSizeUpdater();
 
 // 拦截网络请求
 self.addEventListener('fetch', (event) => {
@@ -191,28 +361,86 @@ self.addEventListener('fetch', (event) => {
             });
           }
         } else {
-          // 普通请求，使用基于内容哈希的缓存策略
+          // 普通请求，使用基于版本号和内容哈希的缓存策略
           try {
             // 先尝试从网络获取最新版本
             const networkResponse = await fetch(event.request);
             
             if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
-              // 读取响应内容
-              const responseText = await networkResponse.clone().text();
-              // 生成内容哈希
-              const contentHash = await generateContentHash(responseText);
+              const url = new URL(event.request.url);
               
-              // 检查缓存中是否已有该资源
-              const cachedResponse = await caches.match(event.request);
+              // 检查是否是 version.json 请求
+              if (url.pathname.endsWith('version.json')) {
+                // 直接更新缓存并通知客户端
+                const responseToCache = networkResponse.clone();
+                const cache = await caches.open(CACHE_NAME);
+                await cache.put(event.request, responseToCache);
+                
+                // 获取新版本号
+                const newVersion = await getVersionFromResponse(networkResponse.clone());
+                if (newVersion && newVersion !== currentVersion) {
+                  currentVersion = newVersion;
+                  // 通知客户端有新版本
+                  self.clients.matchAll().then((clients) => {
+                    clients.forEach((client) => {
+                      client.postMessage({ 
+                        type: 'VERSION_UPDATED',
+                        version: newVersion
+                      });
+                    });
+                  });
+                }
+                
+                return networkResponse;
+              }
+              
+              // 检查是否需要进行文件大小比较
               let shouldUpdateCache = true;
               
-              if (cachedResponse) {
-                // 读取缓存内容并生成哈希
-                const cachedText = await cachedResponse.text();
-                const cachedHash = await generateContentHash(cachedText);
-                // 如果哈希相同，不需要更新缓存
-                if (cachedHash === contentHash) {
-                  shouldUpdateCache = false;
+              // 首先尝试通过文件大小比较决定是否更新
+              try {
+                // 检查缓存中是否已有该资源
+                const cachedResponse = await caches.match(event.request);
+                if (cachedResponse) {
+                  // 尝试获取缓存文件的大小
+                  const cachedText = await cachedResponse.text();
+                  const cachedSize = new Blob([cachedText]).size;
+                  
+                  // 获取网络响应的大小
+                  const networkText = await networkResponse.clone().text();
+                  const networkSize = new Blob([networkText]).size;
+                  
+                  // 使用文件大小比较决定是否更新
+                  shouldUpdateCache = fileSizeUpdater.shouldUpdate(networkSize, cachedSize);
+                  
+                  if (!shouldUpdateCache) {
+                    console.log('文件大小比较：源文件大小小于或等于目标文件，不更新缓存');
+                    return cachedResponse;
+                  }
+                }
+              } catch (error) {
+                console.error('文件大小比较失败，回退到内容哈希比较:', error);
+                // 文件大小比较失败，回退到内容哈希比较
+              }
+              
+              // 回退到内容哈希比较
+              if (shouldUpdateCache) {
+                // 读取响应内容
+                const responseText = await networkResponse.clone().text();
+                // 生成内容哈希
+                const contentHash = await generateContentHash(responseText);
+                
+                // 检查缓存中是否已有该资源
+                const cachedResponse = await caches.match(event.request);
+                
+                if (cachedResponse) {
+                  // 读取缓存内容并生成哈希
+                  const cachedText = await cachedResponse.text();
+                  const cachedHash = await generateContentHash(cachedText);
+                  // 如果哈希相同，不需要更新缓存
+                  if (cachedHash === contentHash) {
+                    shouldUpdateCache = false;
+                  }
                 }
               }
               
@@ -304,5 +532,12 @@ self.addEventListener('message', (event) => {
           });
         });
       });
+  }
+  // 处理获取版本号请求
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.source.postMessage({
+      type: 'VERSION_INFO',
+      version: currentVersion
+    });
   }
 });

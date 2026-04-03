@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件大小比较更新机制测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%);
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        .test-section h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .log-container {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>文件大小比较更新机制测试</h1>
+        
+        <div class="test-section">
+            <h2>测试 1: 基本文件大小比较</h2>
+            <button onclick="testBasicComparison()">运行测试</button>
+            <div id="test1-result" class="test-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>测试 2: 远程文件大小获取</h2>
+            <button onclick="testRemoteFileSize()">运行测试</button>
+            <div id="test2-result" class="test-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>测试 3: 更新决策逻辑</h2>
+            <button onclick="testUpdateDecision()">运行测试</button>
+            <div id="test3-result" class="test-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>测试 4: 异常处理</h2>
+            <button onclick="testErrorHandling()">运行测试</button>
+            <div id="test4-result" class="test-result"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>日志记录</h2>
+            <div id="log-container" class="log-container"></div>
+        </div>
+    </div>
+    
+    <script src="FileSizeUpdater.js"></script>
+    <script>
+        // 自定义日志记录器，将日志显示在页面上
+        class TestLogger {
+            constructor() {
+                this.logContainer = document.getElementById('log-container');
+            }
+            
+            info(message, data = null) {
+                const timestamp = new Date().toISOString();
+                const logMessage = `[${timestamp}] [INFO] ${message}`;
+                this.addLog(logMessage, data);
+                console.log(logMessage, data);
+            }
+            
+            error(message, error = null) {
+                const timestamp = new Date().toISOString();
+                const logMessage = `[${timestamp}] [ERROR] ${message}`;
+                this.addLog(logMessage, error);
+                console.error(logMessage, error);
+            }
+            
+            addLog(message, data = null) {
+                const logElement = document.createElement('div');
+                logElement.textContent = message;
+                if (data) {
+                    const dataElement = document.createElement('div');
+                    dataElement.textContent = JSON.stringify(data, null, 2);
+                    dataElement.style.marginLeft = '20px';
+                    dataElement.style.color = '#666';
+                    logElement.appendChild(dataElement);
+                }
+                this.logContainer.appendChild(logElement);
+                this.logContainer.scrollTop = this.logContainer.scrollHeight;
+            }
+        }
+        
+        const testLogger = new TestLogger();
+        const fileSizeUpdater = new FileSizeUpdater();
+        
+        // 覆盖默认日志记录器
+        fileSizeUpdater.logger = testLogger;
+        
+        // 测试 1: 基本文件大小比较
+        async function testBasicComparison() {
+            const resultElement = document.getElementById('test1-result');
+            resultElement.innerHTML = '';
+            
+            try {
+                testLogger.info('开始测试基本文件大小比较');
+                
+                // 测试场景 1: 源文件大于目标文件
+                const comparison1 = fileSizeUpdater.compareFileSizes(1000, 500);
+                const shouldUpdate1 = fileSizeUpdater.shouldUpdate(1000, 500);
+                
+                // 测试场景 2: 源文件小于目标文件
+                const comparison2 = fileSizeUpdater.compareFileSizes(500, 1000);
+                const shouldUpdate2 = fileSizeUpdater.shouldUpdate(500, 1000);
+                
+                // 测试场景 3: 源文件等于目标文件
+                const comparison3 = fileSizeUpdater.compareFileSizes(500, 500);
+                const shouldUpdate3 = fileSizeUpdater.shouldUpdate(500, 500);
+                
+                let html = '<div class="success">测试通过！</div>';
+                html += `<div class="info">场景 1: 源文件(1000) > 目标文件(500) → 应更新: ${shouldUpdate1}</div>`;
+                html += `<div class="info">场景 2: 源文件(500) < 目标文件(1000) → 应更新: ${shouldUpdate2}</div>`;
+                html += `<div class="info">场景 3: 源文件(500) = 目标文件(500) → 应更新: ${shouldUpdate3}</div>`;
+                
+                resultElement.innerHTML = html;
+            } catch (error) {
+                resultElement.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+                testLogger.error('测试基本文件大小比较失败', error);
+            }
+        }
+        
+        // 测试 2: 远程文件大小获取
+        async function testRemoteFileSize() {
+            const resultElement = document.getElementById('test2-result');
+            resultElement.innerHTML = '';
+            
+            try {
+                testLogger.info('开始测试远程文件大小获取');
+                
+                // 测试获取远程文件大小
+                const testUrl = 'https://picsum.photos/id/10/100/100';
+                const fileSize = await fileSizeUpdater.getRemoteFileSize(testUrl);
+                
+                resultElement.innerHTML = `<div class="success">测试通过！</div><div class="info">文件大小: ${fileSize} 字节</div>`;
+                testLogger.info(`远程文件大小: ${fileSize} 字节`, { url: testUrl });
+            } catch (error) {
+                resultElement.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+                testLogger.error('测试远程文件大小获取失败', error);
+            }
+        }
+        
+        // 测试 3: 更新决策逻辑
+        async function testUpdateDecision() {
+            const resultElement = document.getElementById('test3-result');
+            resultElement.innerHTML = '';
+            
+            try {
+                testLogger.info('开始测试更新决策逻辑');
+                
+                // 模拟文件大小
+                const testCases = [
+                    { source: 1000, target: 500, expected: true, description: '源文件大于目标文件' },
+                    { source: 500, target: 1000, expected: false, description: '源文件小于目标文件' },
+                    { source: 500, target: 500, expected: false, description: '源文件等于目标文件' }
+                ];
+                
+                let allPassed = true;
+                let html = '<div class="success">测试通过！</div>';
+                
+                for (const testCase of testCases) {
+                    const shouldUpdate = fileSizeUpdater.shouldUpdate(testCase.source, testCase.target);
+                    const passed = shouldUpdate === testCase.expected;
+                    allPassed &= passed;
+                    
+                    const statusClass = passed ? 'success' : 'error';
+                    html += `<div class="${statusClass}">${testCase.description}: ${shouldUpdate} (期望: ${testCase.expected})</div>`;
+                }
+                
+                if (!allPassed) {
+                    html = '<div class="error">部分测试失败！</div>' + html;
+                }
+                
+                resultElement.innerHTML = html;
+            } catch (error) {
+                resultElement.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+                testLogger.error('测试更新决策逻辑失败', error);
+            }
+        }
+        
+        // 测试 4: 异常处理
+        async function testErrorHandling() {
+            const resultElement = document.getElementById('test4-result');
+            resultElement.innerHTML = '';
+            
+            try {
+                testLogger.info('开始测试异常处理');
+                
+                // 测试无效的 URL
+                try {
+                    await fileSizeUpdater.getRemoteFileSize('invalid-url');
+                    resultElement.innerHTML = '<div class="error">测试失败: 应该抛出异常</div>';
+                } catch (error) {
+                    resultElement.innerHTML = '<div class="success">测试通过！异常处理正常</div>';
+                    testLogger.info('异常处理测试通过', { error: error.message });
+                }
+            } catch (error) {
+                resultElement.innerHTML = `<div class="error">测试失败: ${error.message}</div>`;
+                testLogger.error('测试异常处理失败', error);
+            }
+        }
+        
+        // 页面加载时初始化
+        window.onload = function() {
+            testLogger.info('文件大小比较更新机制测试页面加载完成');
+        };
+    </script>
+</body>
+</html>
