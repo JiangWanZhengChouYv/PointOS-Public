@@ -9,6 +9,17 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 // 版本日志数据
 const VERSION_LOGS = [
     {
+        version: '1.2.4',
+        date: '2026-04-03',
+        changes: [
+            '【版本更新】更新系统版本至1.2.4',
+            '【功能优化】优化缓存更新机制，实现代码变更自动检测',
+            '【功能优化】新增版本更新提示功能，用户可选择立即更新或稍后更新',
+            '【Bug修复】修复缓存更新不提示的问题',
+            '【性能优化】改进Service Worker更新策略，提升更新检测准确性'
+        ]
+    },
+    {
         version: '1.2.3',
         date: '2026-04-02',
         changes: [
