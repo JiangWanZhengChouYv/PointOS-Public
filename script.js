@@ -1,13 +1,24 @@
 // 班级积分管理系统
-// 版本: 1.2.4
+// 版本: 1.3.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
-const ACCELERATION_SETTINGS_KEY = 'classScoreSystem_acceleration';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.3.0',
+        date: '2026-04-03',
+        changes: [
+            '【版本更新】更新系统版本至1.3.0',
+            '【功能修复】修正导出class-score-json文件时丢失当前壁纸信息的问题',
+            '【新增功能】实现小组加分自定义分值功能',
+            '【新增功能】实现小组减分自定义分值功能',
+            '【功能优化】确保自定义分值信息正确存储在class-score-json文件中',
+            '【新增功能】在设置模块中实现加分值管理功能，可通过设置菜单快速访问加分/减分操作'
+        ]
+    },
     {
         version: '1.2.4',
         date: '2026-04-03',
@@ -197,17 +208,6 @@ function checkNetworkStatus() {
     });
 }
 
-// 使用jsdelivr CDN加速URL
-function getCDNAcceleratedURL(url) {
-    // 提取图片ID
-    const match = url.match(/photo-(\d+)/);
-    if (match && match[1]) {
-        const photoId = match[1];
-        return `https://cdn.jsdelivr.net/gh/unsplash/photos@main/${photoId}.jpg`;
-    }
-    return url;
-}
-
 // 应用壁纸
 function applyWallpaper(settings) {
     const body = document.body;
@@ -216,34 +216,24 @@ function applyWallpaper(settings) {
         body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
         body.classList.remove('wallpaper-custom');
     } else {
-        // 检测网络环境
-        checkNetworkStatus().then(networkStatus => {
-            let wallpaperUrl = settings.url;
-            
-            // 如果网络环境不佳，使用CDN加速
-            if (networkStatus.isPoor) {
-                wallpaperUrl = getCDNAcceleratedURL(settings.url);
-            }
-            
-            // 实现图片懒加载和错误处理
-            const img = new Image();
-            img.onload = function() {
-                body.style.backgroundImage = `url(${wallpaperUrl})`;
-                body.style.backgroundSize = 'cover';
-                body.style.backgroundPosition = 'center';
-                body.style.backgroundRepeat = 'no-repeat';
-                body.style.backgroundAttachment = 'fixed';
-                body.classList.add('wallpaper-custom');
-            };
-            img.onerror = function() {
-                // 加载失败时使用默认背景
-                body.style.backgroundImage = 'none';
-                body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
-                body.classList.remove('wallpaper-custom');
-                console.error('壁纸加载失败，使用默认背景');
-            };
-            img.src = wallpaperUrl;
-        });
+        // 实现图片懒加载和错误处理
+        const img = new Image();
+        img.onload = function() {
+            body.style.backgroundImage = `url(${settings.url})`;
+            body.style.backgroundSize = 'cover';
+            body.style.backgroundPosition = 'center';
+            body.style.backgroundRepeat = 'no-repeat';
+            body.style.backgroundAttachment = 'fixed';
+            body.classList.add('wallpaper-custom');
+        };
+        img.onerror = function() {
+            // 加载失败时使用默认背景
+            body.style.backgroundImage = 'none';
+            body.style.background = 'linear-gradient(135deg, #f0f4ff 0%, #e0e7ff 50%, #f0f9ff 100%)';
+            body.classList.remove('wallpaper-custom');
+            console.error('壁纸加载失败，使用默认背景');
+        };
+        img.src = settings.url;
     }
 }
 
@@ -253,108 +243,6 @@ function resetWallpaper() {
     saveWallpaperSettings(defaultSettings);
     applyWallpaper(defaultSettings);
     return defaultSettings;
-}
-
-// 初始化网络加速设置
-function initAccelerationSettings() {
-    const existingSettings = localStorage.getItem(ACCELERATION_SETTINGS_KEY);
-    if (existingSettings) {
-        return JSON.parse(existingSettings);
-    }
-    const defaultSettings = { enabled: true };
-    localStorage.setItem(ACCELERATION_SETTINGS_KEY, JSON.stringify(defaultSettings));
-    return defaultSettings;
-}
-
-// 保存网络加速设置
-function saveAccelerationSettings(settings) {
-    localStorage.setItem(ACCELERATION_SETTINGS_KEY, JSON.stringify(settings));
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-            type: 'ACCELERATION_CONTROL',
-            enabled: settings.enabled
-        });
-    }
-}
-
-// 清除加速缓存
-function clearAccelerationCache() {
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_ACCELERATION_CACHE' });
-    }
-}
-
-// 加载速度测试
-function testLoadSpeed() {
-    const accelerationSettings = initAccelerationSettings();
-    const originalEnabled = accelerationSettings.enabled;
-    
-    function testWithoutAcceleration() {
-        return new Promise((resolve, reject) => {
-            accelerationSettings.enabled = false;
-            saveAccelerationSettings(accelerationSettings);
-            setTimeout(() => {
-                const startTime = performance.now();
-                fetch('https://jiangwanzhengchouyv.github.io/PointOS/updates/update-info.json?test=' + Date.now())
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
-                        return response.json();
-                    })
-                    .then(() => {
-                        const endTime = performance.now();
-                        resolve(endTime - startTime);
-                    })
-                    .catch(error => {
-                        console.error('测试无加速时出错:', error);
-                        reject(error);
-                    });
-            }, 1000);
-        });
-    }
-    
-    function testWithAcceleration() {
-        return new Promise((resolve, reject) => {
-            accelerationSettings.enabled = true;
-            saveAccelerationSettings(accelerationSettings);
-            setTimeout(() => {
-                const startTime = performance.now();
-                fetch('https://jiangwanzhengchouyv.github.io/PointOS/updates/update-info.json?test=' + Date.now())
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Network response was not ok');
-                        }
-                        return response.json();
-                    })
-                    .then(() => {
-                        const endTime = performance.now();
-                        resolve(endTime - startTime);
-                    })
-                    .catch(error => {
-                        console.error('测试有加速时出错:', error);
-                        reject(error);
-                    });
-            }, 1000);
-        });
-    }
-    
-    alert('开始网络加速效果测试，请稍候...');
-    
-    testWithoutAcceleration()
-        .then(withoutTime => {
-            return testWithAcceleration().then(withTime => {
-                accelerationSettings.enabled = originalEnabled;
-                saveAccelerationSettings(accelerationSettings);
-                const improvement = ((withoutTime - withTime) / withoutTime) * 100;
-                alert(`网络加速测试结果：\n\n禁用加速时：${withoutTime.toFixed(2)} 毫秒\n启用加速时：${withTime.toFixed(2)} 毫秒\n性能提升：${improvement.toFixed(2)}%`);
-            });
-        })
-        .catch(error => {
-            accelerationSettings.enabled = originalEnabled;
-            saveAccelerationSettings(accelerationSettings);
-            alert('测试失败：' + error.message);
-        });
 }
 
 // 初始化数据
@@ -885,11 +773,89 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     
     fragment.appendChild(buttonContainer);
     
+    // 添加自定义分值输入
+    const customSection = document.createElement('div');
+    customSection.style.cssText = 'margin: 15px 0;';
+    
+    const customLabel = document.createElement('label');
+    customLabel.textContent = type === 'add' ? '自定义加分值：' : '自定义减分值：';
+    customLabel.style.cssText = 'display: block; margin-bottom: 5px; font-size: 14px;';
+    
+    const customInput = document.createElement('input');
+    customInput.type = 'number';
+    customInput.min = '1';
+    customInput.max = '100';
+    customInput.step = '1';
+    customInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;';
+    
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'popup-button';
+    confirmButton.textContent = '确定';
+    confirmButton.style.cssText = 'margin-top: 10px; width: 100%;';
+    
+    const handleCustomInput = (e) => {
+        if (e.key === 'Enter') {
+            handleConfirm();
+        }
+    };
+    
+    const handleConfirm = () => {
+        const customValue = parseInt(customInput.value);
+        if (isNaN(customValue) || customValue < 1 || customValue > 100) {
+            alert('请输入1-100之间的有效数字！');
+            return;
+        }
+        
+        if (type === 'add') {
+            scoreData.groups[group] = (scoreData.groups[group] || 0) + customValue;
+        } else {
+            scoreData.groups[group] = Math.max(0, (scoreData.groups[group] || 0) - customValue);
+        }
+        saveData(scoreData);
+        
+        // 缓存DOM引用，减少DOM查询
+        const scoreGroup = document.querySelector(`.score-group[data-group="${group}"]`);
+        if (scoreGroup) {
+            const scoreElement = scoreGroup.querySelector('.score-value');
+            const inputElement = scoreGroup.querySelector('.score-input');
+            if (scoreElement) {
+                scoreElement.textContent = scoreData.groups[group];
+                addFeedback(scoreElement);
+            }
+            if (inputElement) inputElement.value = scoreData.groups[group];
+        }
+        
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            // 清理事件监听器
+            buttonContainer.querySelectorAll('button').forEach(btn => {
+                btn.removeEventListener('click', arguments.callee);
+            });
+            cancelButton.removeEventListener('click', cancelHandler);
+            customInput.removeEventListener('keypress', handleCustomInput);
+            confirmButton.removeEventListener('click', handleConfirm);
+        }, 400);
+    };
+    
+    customInput.addEventListener('keypress', handleCustomInput);
+    confirmButton.addEventListener('click', handleConfirm);
+    
+    customSection.appendChild(customLabel);
+    customSection.appendChild(customInput);
+    customSection.appendChild(confirmButton);
+    
+    fragment.appendChild(customSection);
+    
     const cancelHandler = () => {
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
             document.body.removeChild(overlay);
+            // 清理事件监听器
+            customInput.removeEventListener('keypress', handleCustomInput);
+            confirmButton.removeEventListener('click', handleConfirm);
         }, 400);
     };
     
@@ -919,12 +885,125 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     document.body.appendChild(overlay);
 }
 
-
-
-
-
-
-
+// 创建加分值管理弹出层
+function createScoreValueManagementPopup(scoreData, saveData, loadDataToPage, addFeedback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    
+    const fragment = document.createDocumentFragment();
+    
+    const title = document.createElement('h3');
+    title.textContent = '加分值管理';
+    fragment.appendChild(title);
+    
+    let selectedGroup = null;
+    
+    const groupSection = document.createElement('div');
+    groupSection.style.cssText = 'margin: 15px 0;';
+    
+    const groupTitle = document.createElement('h4');
+    groupTitle.textContent = '选择小组';
+    groupSection.appendChild(groupTitle);
+    
+    const groupContainer = document.createElement('div');
+    groupContainer.className = 'popup-buttons';
+    
+    for (let i = 1; i <= 7; i++) {
+        const groupButton = document.createElement('button');
+        groupButton.className = 'popup-button';
+        groupButton.textContent = `小组 ${i}`;
+        groupButton.dataset.group = i.toString();
+        
+        groupButton.addEventListener('click', function() {
+            document.querySelectorAll('[data-group]').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            this.classList.add('selected');
+            selectedGroup = i.toString();
+        });
+        
+        groupContainer.appendChild(groupButton);
+    }
+    
+    groupSection.appendChild(groupContainer);
+    fragment.appendChild(groupSection);
+    
+    const actionButtonsSection = document.createElement('div');
+    actionButtonsSection.style.cssText = 'margin: 15px 0;';
+    
+    const actionButtonsContainer = document.createElement('div');
+    actionButtonsContainer.className = 'popup-buttons';
+    
+    const addButton = document.createElement('button');
+    addButton.className = 'popup-button';
+    addButton.textContent = '添加加分值';
+    addButton.addEventListener('click', function() {
+        if (!selectedGroup) {
+            alert('请先选择一个小组！');
+            return;
+        }
+        createPopup('add', selectedGroup, scoreData, saveData, loadDataToPage, addFeedback);
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
+    
+    const subtractButton = document.createElement('button');
+    subtractButton.className = 'popup-button';
+    subtractButton.textContent = '删减加分值';
+    subtractButton.addEventListener('click', function() {
+        if (!selectedGroup) {
+            alert('请先选择一个小组！');
+            return;
+        }
+        createPopup('subtract', selectedGroup, scoreData, saveData, loadDataToPage, addFeedback);
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
+    
+    actionButtonsContainer.appendChild(addButton);
+    actionButtonsContainer.appendChild(subtractButton);
+    actionButtonsSection.appendChild(actionButtonsContainer);
+    fragment.appendChild(actionButtonsSection);
+    
+    const cancelHandler = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    };
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', cancelHandler);
+    fragment.appendChild(cancelButton);
+    
+    popup.appendChild(fragment);
+    overlay.appendChild(popup);
+    
+    const handleScroll = (e) => {
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
+    document.body.appendChild(overlay);
+}
 
 
 // 监听Service Worker消息
@@ -1069,7 +1148,6 @@ function init() {
     const wallpaperSettings = initWallpaperSettings();
     applyWallpaper(wallpaperSettings);
     
-    const accelerationSettings = initAccelerationSettings();
     let scoreData = initData();
     
     loadDataToPage(scoreData);
@@ -1174,7 +1252,7 @@ function init() {
     // 设置按钮点击事件
     if (settingsBtn) {
         settingsBtn.addEventListener('click', function() {
-            createSettingsPopup(accelerationSettings, scoreData, saveData, loadDataToPage);
+            createSettingsPopup(scoreData, saveData, loadDataToPage);
         });
     }
     
@@ -1276,7 +1354,7 @@ function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedbac
 }
 
 // 创建设置弹出层
-function createSettingsPopup(accelerationSettings, scoreData, saveData, loadDataToPage) {
+function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
     const popup = document.createElement('div');
@@ -1286,53 +1364,7 @@ function createSettingsPopup(accelerationSettings, scoreData, saveData, loadData
     title.textContent = '设置';
     popup.appendChild(title);
     
-    // 网络加速
-    const accelerationSection = document.createElement('div');
-    accelerationSection.className = 'acceleration-section';
-    
-    const accelerationTitle = document.createElement('h4');
-    accelerationTitle.textContent = '网络加速设置';
-    accelerationSection.appendChild(accelerationTitle);
-    
-    const enableContainer = document.createElement('div');
-    enableContainer.style.cssText = 'display:flex;align-items:center;margin-bottom:15px';
-    
-    const enableLabel = document.createElement('span');
-    enableLabel.textContent = '启用网络加速';
-    enableLabel.style.marginRight = '10px';
-    enableContainer.appendChild(enableLabel);
-    
-    const enableSwitch = document.createElement('label');
-    enableSwitch.className = 'switch';
-    enableSwitch.innerHTML = `<input type="checkbox" ${accelerationSettings.enabled ? 'checked' : ''}><span class="slider round"></span>`;
-    enableContainer.appendChild(enableSwitch);
-    accelerationSection.appendChild(enableContainer);
-    
-    const accelerationButtons = document.createElement('div');
-    accelerationButtons.style.cssText = 'display:flex;gap:10px;margin-bottom:15px';
-    
-    const clearCacheButton = document.createElement('button');
-    clearCacheButton.className = 'popup-button';
-    clearCacheButton.textContent = '清除加速缓存';
-    clearCacheButton.addEventListener('click', () => {
-        clearAccelerationCache();
-        alert('加速缓存已清除');
-    });
-    accelerationButtons.appendChild(clearCacheButton);
-    
-    const testSpeedButton = document.createElement('button');
-    testSpeedButton.className = 'popup-button';
-    testSpeedButton.textContent = '测试加载速度';
-    testSpeedButton.addEventListener('click', testLoadSpeed);
-    accelerationButtons.appendChild(testSpeedButton);
-    accelerationSection.appendChild(accelerationButtons);
-    
-    enableSwitch.querySelector('input').addEventListener('change', function() {
-        accelerationSettings.enabled = this.checked;
-        saveAccelerationSettings(accelerationSettings);
-    });
-    
-    popup.appendChild(accelerationSection);
+
     
     // 按钮容器
     const buttonContainer = document.createElement('div');
@@ -1352,12 +1384,32 @@ function createSettingsPopup(accelerationSettings, scoreData, saveData, loadData
     });
     buttonContainer.appendChild(wallpaperButton);
     
+    // 加分值管理
+    const scoreValueManagementButton = document.createElement('button');
+    scoreValueManagementButton.className = 'popup-button';
+    scoreValueManagementButton.textContent = '加分值管理';
+    scoreValueManagementButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            createScoreValueManagementPopup(scoreData, saveData, loadDataToPage, addFeedback);
+        }, 400);
+    });
+    buttonContainer.appendChild(scoreValueManagementButton);
+    
     // 导出JSON
     const exportButton = document.createElement('button');
     exportButton.className = 'popup-button';
     exportButton.textContent = '导出JSON';
     exportButton.addEventListener('click', function() {
-        const dataStr = JSON.stringify(scoreData, null, 2);
+        // 包含壁纸设置信息
+        const wallpaperSettings = initWallpaperSettings();
+        const exportData = {
+            groups: scoreData.groups,
+            wallpaper: wallpaperSettings
+        };
+        const dataStr = JSON.stringify(exportData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
         const link = document.createElement('a');
@@ -1394,6 +1446,11 @@ function createSettingsPopup(accelerationSettings, scoreData, saveData, loadData
                         scoreData = importedData;
                         saveData(scoreData);
                         loadDataToPage(scoreData);
+                        // 导入壁纸设置
+                        if (importedData.wallpaper) {
+                            saveWallpaperSettings(importedData.wallpaper);
+                            applyWallpaper(importedData.wallpaper);
+                        }
                         alert('导入成功！');
                     } else {
                         alert('无效的JSON文件格式！');
