@@ -1,12 +1,21 @@
 // 班级积分管理系统
-// 版本: 1.3.0
+// 版本: 1.3.1
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
+const EVALUATION_URL_STORAGE_KEY = 'classScoreSystem_evaluationUrl';
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.3.1',
+        date: '2026-04-25',
+        changes: [
+            '【版本更新】更新系统版本至1.3.1',
+            '【新增功能】实现评比跳转网址设置功能，可在设置菜单中自定义跳转网址'
+        ]
+    },
     {
         version: '1.3.0',
         date: '2026-04-03',
@@ -105,6 +114,22 @@ function initWallpaperSettings() {
 // 保存壁纸设置
 function saveWallpaperSettings(settings) {
     localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(settings));
+}
+
+// 初始化评比跳转网址设置
+function initEvaluationUrlSettings() {
+    const existingSettings = localStorage.getItem(EVALUATION_URL_STORAGE_KEY);
+    if (!existingSettings) {
+        const defaultUrl = 'https://bjcwy.rxtw666.cn/login';
+        localStorage.setItem(EVALUATION_URL_STORAGE_KEY, defaultUrl);
+        return defaultUrl;
+    }
+    return existingSettings;
+}
+
+// 保存评比跳转网址设置
+function saveEvaluationUrlSettings(url) {
+    localStorage.setItem(EVALUATION_URL_STORAGE_KEY, url);
 }
 
 // 显示版本日志
@@ -1256,12 +1281,7 @@ function init() {
         });
     }
     
-    // 评比按钮点击事件（冗余，已通过事件委托处理）
-    if (evaluateBtn) {
-        evaluateBtn.addEventListener('click', function() {
-            evaluateScore(scoreData, saveData, loadDataToPage, addFeedback);
-        });
-    }
+    
 }
 
 // 创建全局操作弹出层
@@ -1398,6 +1418,44 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     });
     buttonContainer.appendChild(scoreValueManagementButton);
     
+    // 评比跳转网址设置
+    const evaluationUrlSection = document.createElement('div');
+    evaluationUrlSection.style.cssText = 'margin: 15px 0; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px;';
+    
+    const evaluationUrlTitle = document.createElement('h4');
+    evaluationUrlTitle.textContent = '评比跳转网址';
+    evaluationUrlTitle.style.cssText = 'margin: 0 0 10px 0; font-size: 14px; font-weight: 600;';
+    evaluationUrlSection.appendChild(evaluationUrlTitle);
+    
+    const evaluationUrlInput = document.createElement('input');
+    evaluationUrlInput.type = 'text';
+    evaluationUrlInput.value = initEvaluationUrlSettings();
+    evaluationUrlInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 10px;';
+    evaluationUrlSection.appendChild(evaluationUrlInput);
+    
+    const saveEvaluationUrlButton = document.createElement('button');
+    saveEvaluationUrlButton.className = 'popup-button';
+    saveEvaluationUrlButton.textContent = '保存';
+    saveEvaluationUrlButton.style.cssText = 'width: 100%;';
+    saveEvaluationUrlButton.addEventListener('click', function() {
+        const url = evaluationUrlInput.value.trim();
+        if (!url) {
+            alert('请输入跳转网址！');
+            return;
+        }
+        
+        // URL格式验证
+        try {
+            new URL(url);
+            saveEvaluationUrlSettings(url);
+            alert('保存成功！');
+        } catch (error) {
+            alert('请输入有效的URL格式！');
+        }
+    });
+    evaluationUrlSection.appendChild(saveEvaluationUrlButton);
+    popup.appendChild(evaluationUrlSection);
+    
     // 导出JSON
     const exportButton = document.createElement('button');
     exportButton.className = 'popup-button';
@@ -1515,6 +1573,56 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     document.body.appendChild(overlay);
 }
 
+// 创建评比结果弹窗
+function createEvaluateResultPopup(message, onClose) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = '评比结果';
+    popup.appendChild(title);
+    
+    const messageElement = document.createElement('p');
+    messageElement.textContent = message;
+    messageElement.style.cssText = 'margin: 15px 0; font-size: 16px; text-align: center;';
+    popup.appendChild(messageElement);
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    const okButton = document.createElement('button');
+    okButton.className = 'popup-button';
+    okButton.textContent = '确定';
+    okButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            if (onClose) onClose();
+        }, 400);
+    });
+    buttonContainer.appendChild(okButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    
+    const handleScroll = (e) => {
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
+    document.body.appendChild(overlay);
+}
+
 // 评比分数
 function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     let maxScore = -1;
@@ -1529,26 +1637,27 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     }
     
     if (winningGroup) {
-        alert(`评比结果：小组 ${winningGroup} 得分最高，分数为 ${maxScore}！`);
-        
-        for (let i = 1; i <= 7; i++) {
-            scoreData.groups[i.toString()] = 0;
-        }
-        saveData(scoreData);
-        
-        document.querySelectorAll('.score-value').forEach(element => {
-            element.textContent = '0';
-            addFeedback(element);
+        createEvaluateResultPopup(`小组 ${winningGroup} 得分最高，分数为 ${maxScore}！`, () => {
+            for (let i = 1; i <= 7; i++) {
+                scoreData.groups[i.toString()] = 0;
+            }
+            saveData(scoreData);
+            
+            document.querySelectorAll('.score-value').forEach(element => {
+                element.textContent = '0';
+                addFeedback(element);
+            });
+            document.querySelectorAll('.score-input').forEach(element => {
+                element.value = '0';
+            });
+            
+            setTimeout(() => {
+                const evaluationUrl = initEvaluationUrlSettings();
+                window.location.href = evaluationUrl;
+            }, 1000);
         });
-        document.querySelectorAll('.score-input').forEach(element => {
-            element.value = '0';
-        });
-        
-        setTimeout(() => {
-            window.location.href = 'https://bjcwy.rxtw666.cn/login';
-        }, 1000);
     } else {
-        alert('没有可评比的分数！');
+        createEvaluateResultPopup('没有可评比的分数！');
     }
 }
 
