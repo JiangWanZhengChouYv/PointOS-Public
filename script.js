@@ -1308,7 +1308,7 @@ function init() {
             } else if (target.classList.contains('score-subtract')) {
                 createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('score-reset')) {
-                if (confirm('确定要重置该小组的积分吗？')) {
+                createConfirmPopup('确认重置', '确定要重置该小组的积分吗？', () => {
                     scoreData.groups[group] = 0;
                     saveData(scoreData);
                     
@@ -1319,7 +1319,7 @@ function init() {
                         addFeedback(scoreElement);
                     }
                     if (inputElement) inputElement.value = '0';
-                }
+                });
             } else if (target.classList.contains('score-save')) {
                 const inputElement = scoreGroup.querySelector('.score-input');
                 const scoreValue = parseInt(inputElement.value);
@@ -1360,7 +1360,7 @@ function init() {
             const target = e.target;
             
             if (target.classList.contains('reset-all')) {
-                if (confirm('确定要重置所有小组的积分吗？')) {
+                createConfirmPopup('确认重置', '确定要重置所有小组的积分吗？', () => {
                     for (let i = 1; i <= 7; i++) {
                         scoreData.groups[i.toString()] = 0;
                     }
@@ -1373,7 +1373,7 @@ function init() {
                     document.querySelectorAll('.score-input').forEach(element => {
                         element.value = '0';
                     });
-                }
+                });
             } else if (target.classList.contains('add-all')) {
                 createGlobalPopup('add', scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('subtract-all')) {
@@ -1713,6 +1713,69 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     // 添加滚动事件处理，阻止背景页面滚动
     const handleScroll = (e) => {
         // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
+    document.body.appendChild(overlay);
+}
+
+function createConfirmPopup(titleText, message, onConfirm, onCancel) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = titleText;
+    popup.appendChild(title);
+    
+    const messageElement = document.createElement('p');
+    messageElement.textContent = message;
+    messageElement.style.cssText = 'margin: 15px 0; font-size: 16px; text-align: center;';
+    popup.appendChild(messageElement);
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-button';
+    cancelButton.textContent = '取消';
+    cancelButton.style.cssText = 'background: #e0e0e0; color: #333;';
+    cancelButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            if (onCancel) onCancel();
+        }, 400);
+    });
+    buttonContainer.appendChild(cancelButton);
+    
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'popup-button';
+    confirmButton.textContent = '确定';
+    confirmButton.addEventListener('click', () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            if (onConfirm) onConfirm();
+        }, 400);
+    });
+    buttonContainer.appendChild(confirmButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    
+    const handleScroll = (e) => {
         const hasScroll = popup.scrollHeight > popup.clientHeight;
         if (!hasScroll) {
             e.preventDefault();
