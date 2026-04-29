@@ -5,6 +5,111 @@
 const STORAGE_KEY = 'classScoreSystem';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const EVALUATION_URL_STORAGE_KEY = 'classScoreSystem_evaluationUrl';
+const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
+
+// 性能模式相关
+let isPerformanceModeEnabled = false;
+let devicePerformanceInfo = null;
+
+// 检测设备性能
+function detectDevicePerformance() {
+    const info = {
+        memory: null,
+        cpuCores: null,
+        features: {},
+        isLowEnd: false,
+        score: 100
+    };
+    
+    // 检测内存（GB）
+    if (navigator.deviceMemory) {
+        info.memory = navigator.deviceMemory;
+        if (info.memory <= 4) info.score -= 30;
+        if (info.memory <= 2) info.score -= 20;
+    } else {
+        info.score -= 15;
+    }
+    
+    // 检测CPU核心数
+    if (navigator.hardwareConcurrency) {
+        info.cpuCores = navigator.hardwareConcurrency;
+        if (info.cpuCores <= 4) info.score -= 20;
+        if (info.cpuCores <= 2) info.score -= 15;
+    } else {
+        info.score -= 10;
+    }
+    
+    // 检测浏览器特性支持
+    info.features.intersectionObserver = 'IntersectionObserver' in window;
+    info.features.cssSupports = 'CSS' in window && 'supports' in CSS;
+    info.features.requestAnimationFrame = 'requestAnimationFrame' in window;
+    info.features.webp = document.createElement('canvas').toDataURL('image/webp').indexOf('data:image/webp') === 0;
+    
+    if (!info.features.intersectionObserver) info.score -= 10;
+    if (!info.features.cssSupports) info.score -= 5;
+    if (!info.features.requestAnimationFrame) info.score -= 10;
+    
+    // 检测是否为移动设备或老旧系统
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isOldBrowser = userAgent.indexOf('msie') !== -1 || userAgent.indexOf('trident/7') !== -1;
+    if (isOldBrowser) info.score -= 25;
+    
+    // 综合判断是否为低端设备
+    info.isLowEnd = info.score < 50;
+    
+    return info;
+}
+
+// 初始化性能模式
+function initPerformanceMode() {
+    devicePerformanceInfo = detectDevicePerformance();
+    
+    const savedMode = localStorage.getItem(PERFORMANCE_MODE_KEY);
+    
+    if (savedMode !== null) {
+        isPerformanceModeEnabled = savedMode === 'true';
+    } else {
+        isPerformanceModeEnabled = devicePerformanceInfo.isLowEnd;
+    }
+    
+    applyPerformanceMode(isPerformanceModeEnabled);
+    
+    return { isPerformanceModeEnabled, devicePerformanceInfo };
+}
+
+// 应用性能模式
+function applyPerformanceMode(enabled) {
+    if (enabled) {
+        document.body.classList.add('performance-mode');
+    } else {
+        document.body.classList.remove('performance-mode');
+    }
+    isPerformanceModeEnabled = enabled;
+}
+
+// 切换性能模式
+function togglePerformanceMode() {
+    const newMode = !isPerformanceModeEnabled;
+    applyPerformanceMode(newMode);
+    localStorage.setItem(PERFORMANCE_MODE_KEY, newMode.toString());
+    return newMode;
+}
+
+// 获取设备性能描述
+function getPerformanceDescription() {
+    if (!devicePerformanceInfo) return '未检测';
+    
+    const parts = [];
+    if (devicePerformanceInfo.memory) {
+        parts.push(`内存: ${devicePerformanceInfo.memory}GB`);
+    }
+    if (devicePerformanceInfo.cpuCores) {
+        parts.push(`CPU核心: ${devicePerformanceInfo.cpuCores}`);
+    }
+    parts.push(`性能评分: ${devicePerformanceInfo.score}/100`);
+    
+    return parts.join(' | ');
+}
 
 // 版本日志数据
 const VERSION_LOGS = [
@@ -1170,8 +1275,13 @@ function showUpdateNotification(message) {
 
 // 主函数
 function init() {
+    // 初始化性能模式（需要在其他初始化之前）
+    initPerformanceMode();
+    
     const wallpaperSettings = initWallpaperSettings();
-    applyWallpaper(wallpaperSettings);
+    if (!isPerformanceModeEnabled) {
+        applyWallpaper(wallpaperSettings);
+    }
     
     let scoreData = initData();
     
@@ -1455,6 +1565,49 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     });
     evaluationUrlSection.appendChild(saveEvaluationUrlButton);
     popup.appendChild(evaluationUrlSection);
+    
+    // 性能模式设置
+    const performanceSection = document.createElement('div');
+    performanceSection.className = 'performance-mode-section';
+    
+    const performanceTitle = document.createElement('h4');
+    performanceTitle.textContent = '性能模式';
+    performanceSection.appendChild(performanceTitle);
+    
+    const performanceToggle = document.createElement('div');
+    performanceToggle.className = 'performance-mode-toggle';
+    
+    const performanceLabel = document.createElement('label');
+    performanceLabel.textContent = '启用精简模式（移除动画和特效）';
+    performanceLabel.setAttribute('for', 'performance-toggle');
+    
+    const performanceCheckbox = document.createElement('input');
+    performanceCheckbox.type = 'checkbox';
+    performanceCheckbox.id = 'performance-toggle';
+    performanceCheckbox.checked = isPerformanceModeEnabled;
+    performanceCheckbox.addEventListener('change', function() {
+        togglePerformanceMode();
+        performanceInfoText.textContent = isPerformanceModeEnabled ? '已启用精简模式' : '已禁用精简模式';
+    });
+    
+    performanceToggle.appendChild(performanceLabel);
+    performanceToggle.appendChild(performanceCheckbox);
+    performanceSection.appendChild(performanceToggle);
+    
+    const performanceInfo = document.createElement('div');
+    performanceInfo.className = 'performance-info';
+    
+    const performanceInfoText = document.createElement('div');
+    performanceInfoText.textContent = isPerformanceModeEnabled ? '已启用精简模式' : '已禁用精简模式';
+    performanceInfo.appendChild(performanceInfoText);
+    
+    const deviceInfoText = document.createElement('div');
+    deviceInfoText.className = 'device-info';
+    deviceInfoText.textContent = getPerformanceDescription();
+    performanceInfo.appendChild(deviceInfoText);
+    
+    performanceSection.appendChild(performanceInfo);
+    popup.appendChild(performanceSection);
     
     // 导出JSON
     const exportButton = document.createElement('button');

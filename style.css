@@ -1193,3 +1193,200 @@ footer p {
 .version-section li:last-child {
     margin-bottom: 0;
 }
+
+/* 性能模式样式 - 移除所有动画、阴影、渐变 */
+.performance-mode,
+.performance-mode * {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.performance-mode body,
+.performance-mode .body {
+    background: #f5f5f5 !important;
+    background-image: none !important;
+}
+
+.performance-mode header {
+    background: #6366f1 !important;
+    background-image: none !important;
+}
+
+.performance-mode header::before {
+    display: none !important;
+}
+
+.performance-mode .score-group {
+    background: #ffffff !important;
+    border: 1px solid #e5e7eb !important;
+}
+
+.performance-mode .score-group:hover {
+    transform: none !important;
+}
+
+.performance-mode .popup {
+    animation: none !important;
+    transform: none !important;
+}
+
+.performance-mode .popup-overlay {
+    animation: none !important;
+}
+
+.performance-mode .popup.closing {
+    animation: none !important;
+}
+
+.performance-mode .score-add,
+.performance-mode .score-subtract,
+.performance-mode .score-reset,
+.performance-mode .score-save,
+.performance-mode .reset-all,
+.performance-mode .add-all,
+.performance-mode .subtract-all,
+.performance-mode .settings,
+.performance-mode .evaluate,
+.performance-mode .popup-button,
+.performance-mode .popup-cancel {
+    transition: none !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.performance-mode .score-add:hover,
+.performance-mode .score-subtract:hover,
+.performance-mode .score-reset:hover,
+.performance-mode .score-save:hover,
+.performance-mode .reset-all:hover,
+.performance-mode .add-all:hover,
+.performance-mode .subtract-all:hover,
+.performance-mode .settings:hover,
+.performance-mode .evaluate:hover,
+.performance-mode .popup-button:hover,
+.performance-mode .popup-cancel:hover {
+    transform: none !important;
+}
+
+.performance-mode .score-add:active,
+.performance-mode .score-subtract:active,
+.performance-mode .score-reset:active,
+.performance-mode .score-save:active,
+.performance-mode .reset-all:active,
+.performance-mode .add-all:active,
+.performance-mode .subtract-all:active,
+.performance-mode .settings:active,
+.performance-mode .evaluate:active,
+.performance-mode .popup-button:active,
+.performance-mode .popup-cancel:active {
+    transform: none !important;
+}
+
+.performance-mode .score-value {
+    animation: none !important;
+}
+
+.performance-mode .score-value.updated {
+    animation: none !important;
+}
+
+.performance-mode footer {
+    background: #1f2937 !important;
+}
+
+.performance-mode .wallpaper-custom .score-group {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+}
+
+.performance-mode .wallpaper-custom header {
+    background: #6366f1 !important;
+    backdrop-filter: none !important;
+}
+
+.performance-mode .wallpaper-custom footer {
+    background: #1f2937 !important;
+    backdrop-filter: none !important;
+}
+
+.performance-mode .progress-fill {
+    background: #6366f1 !important;
+    box-shadow: none !important;
+}
+
+.performance-mode .update-notification {
+    animation: none !important;
+}
+
+/* 性能模式设置样式 */
+.performance-mode-section {
+    margin: 15px 0;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+}
+
+.performance-mode-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.performance-mode-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.performance-mode-toggle label {
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.performance-mode-toggle input[type="checkbox"] {
+    width: 44px;
+    height: 24px;
+    appearance: none;
+    background: #e5e7eb;
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.performance-mode-toggle input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.performance-mode-toggle input[type="checkbox"]:checked {
+    background: #6366f1;
+}
+
+.performance-mode-toggle input[type="checkbox"]:checked::before {
+    transform: translateX(20px);
+}
+
+.performance-info {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 8px;
+}
+
+.performance-info .device-info {
+    margin-top: 4px;
+    color: #9ca3af;
+}
