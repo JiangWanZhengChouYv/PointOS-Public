@@ -248,8 +248,8 @@ function saveEvaluationUrlSettings(url) {
     localStorage.setItem(EVALUATION_URL_STORAGE_KEY, url);
 }
 
-// 检查版本更新
-function checkVersionUpdate() {
+// 检查本地版本更新
+function checkLocalVersionUpdate() {
     const lastViewVersion = localStorage.getItem(LAST_VIEW_VERSION_KEY);
     if (!lastViewVersion) {
         localStorage.setItem(LAST_VIEW_VERSION_KEY, CURRENT_VERSION);
@@ -1495,8 +1495,8 @@ function showUpdateNotification(message) {
 
 // 主函数
 function init() {
-    // 检查版本更新
-    const needsVersionUpdate = checkVersionUpdate();
+    // 检查本地版本更新
+    const needsVersionUpdate = checkLocalVersionUpdate();
     if (needsVersionUpdate) {
         const lastViewVersion = localStorage.getItem(LAST_VIEW_VERSION_KEY) || '旧版本';
         setTimeout(() => {
