@@ -1,11 +1,13 @@
 // 班级积分管理系统
-// 版本: 1.3.1
+// 版本: 1.4.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const EVALUATION_URL_STORAGE_KEY = 'classScoreSystem_evaluationUrl';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
+const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
+const CURRENT_VERSION = '1.4.0';
 
 // 性能模式相关
 let isPerformanceModeEnabled = false;
@@ -113,6 +115,15 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.4.0',
+        date: '2026-05-07',
+        changes: [
+            '【版本更新】更新系统版本至1.4.0',
+            '【新增功能】增加版本更新自动检测功能，首次运行或版本更新后自动弹出版本更新日志',
+            '【新增功能】设置中的版本日志同步更新至1.4.0'
+        ]
+    },
     {
         version: '1.3.1',
         date: '2026-04-25',
@@ -235,6 +246,112 @@ function initEvaluationUrlSettings() {
 // 保存评比跳转网址设置
 function saveEvaluationUrlSettings(url) {
     localStorage.setItem(EVALUATION_URL_STORAGE_KEY, url);
+}
+
+// 检查版本更新
+function checkVersionUpdate() {
+    const lastViewVersion = localStorage.getItem(LAST_VIEW_VERSION_KEY);
+    if (!lastViewVersion) {
+        localStorage.setItem(LAST_VIEW_VERSION_KEY, CURRENT_VERSION);
+        return false;
+    }
+    if (lastViewVersion !== CURRENT_VERSION) {
+        return true;
+    }
+    return false;
+}
+
+// 获取待显示的更新日志（只显示从 lastViewVersion 到 CURRENT_VERSION 的更新）
+function getUpdateLogsSince(lastVersion) {
+    const logs = [];
+    for (const log of VERSION_LOGS) {
+        if (log.version === lastVersion) {
+            break;
+        }
+        logs.push(log);
+    }
+    return logs;
+}
+
+// 显示版本更新日志弹窗
+function showVersionUpdatePopup(lastVersion, newVersion, onClose) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup version-log-popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = '🎉 版本更新';
+    popup.appendChild(title);
+    
+    const versionInfo = document.createElement('div');
+    versionInfo.style.cssText = 'margin: 10px 0; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 8px; text-align: center;';
+    versionInfo.innerHTML = `<span style="font-size: 14px;">${lastVersion}</span> → <span style="font-size: 16px; font-weight: bold;">${newVersion}</span>`;
+    popup.appendChild(versionInfo);
+    
+    const logContent = document.createElement('div');
+    logContent.className = 'version-log-content';
+    logContent.style.cssText = 'max-height: 300px; overflow-y: auto; margin: 15px 0; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px;';
+    
+    const logs = getUpdateLogsSince(lastVersion);
+    
+    logs.forEach(version => {
+        const versionSection = document.createElement('div');
+        versionSection.style.cssText = 'margin-bottom: 15px;';
+        
+        const versionHeader = document.createElement('h4');
+        versionHeader.textContent = `版本 ${version.version} (${version.date})`;
+        versionHeader.style.cssText = 'margin: 0 0 8px 0; color: #667eea; font-size: 14px;';
+        versionSection.appendChild(versionHeader);
+        
+        const changesList = document.createElement('ul');
+        changesList.style.cssText = 'margin: 0; padding-left: 20px; font-size: 13px;';
+        version.changes.forEach(change => {
+            const changeItem = document.createElement('li');
+            changeItem.textContent = change;
+            changeItem.style.cssText = 'margin-bottom: 4px;';
+            changesList.appendChild(changeItem);
+        });
+        versionSection.appendChild(changesList);
+        logContent.appendChild(versionSection);
+    });
+    
+    popup.appendChild(logContent);
+    
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-button';
+    closeButton.textContent = '知道了';
+    closeButton.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;';
+    closeButton.addEventListener('click', () => {
+        localStorage.setItem(LAST_VIEW_VERSION_KEY, CURRENT_VERSION);
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            if (onClose) onClose();
+        }, 400);
+    });
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    buttonContainer.appendChild(closeButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    
+    const handleScroll = (e) => {
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
+    document.body.appendChild(overlay);
 }
 
 // 显示版本日志
@@ -379,13 +496,110 @@ function resetWallpaper() {
 function initData() {
     const existingData = localStorage.getItem(STORAGE_KEY);
     if (existingData) {
-        return JSON.parse(existingData);
+        const data = JSON.parse(existingData);
+        // 确保历史记录字段存在
+        if (!data.history) {
+            data.history = [];
+        }
+        return data;
     }
     const defaultData = {
-        groups: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0 }
+        groups: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0 },
+        history: []
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
     return defaultData;
+}
+
+// 添加历史记录
+function addHistoryRecord(scoreData, type, group, before, after) {
+    const record = {
+        type: type,
+        group: group,
+        before: before,
+        after: after,
+        timestamp: Date.now()
+    };
+    scoreData.history.push(record);
+    // 限制最多100条记录
+    if (scoreData.history.length > 100) {
+        scoreData.history.shift();
+    }
+}
+
+// 清空历史记录
+function clearHistory(scoreData) {
+    scoreData.history = [];
+}
+
+// 格式化操作类型
+function formatActionType(type) {
+    const typeMap = {
+        'add': '加分',
+        'subtract': '减分',
+        'reset': '重置',
+        'save': '保存',
+        'add-all': '全员加分',
+        'subtract-all': '全员减分'
+    };
+    return typeMap[type] || type;
+}
+
+// 格式化时间戳
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+// 撤销历史记录
+function undoHistoryRecord(scoreData, recordIndex, saveData, loadDataToPage, addFeedback) {
+    if (recordIndex < 0 || recordIndex >= scoreData.history.length) {
+        return false;
+    }
+    
+    const record = scoreData.history[recordIndex];
+    
+    // 根据记录类型恢复分数
+    if (record.group === null) {
+        // 全员操作，恢复所有小组
+        for (let i = 1; i <= 7; i++) {
+            const groupKey = i.toString();
+            if (record.before && record.before[groupKey] !== undefined) {
+                scoreData.groups[groupKey] = record.before[groupKey];
+            }
+        }
+    } else {
+        // 单个小组操作
+        scoreData.groups[record.group] = record.before;
+    }
+    
+    // 移除被撤销的记录
+    scoreData.history.splice(recordIndex, 1);
+    
+    // 保存数据并更新页面
+    saveData(scoreData);
+    loadDataToPage(scoreData);
+    
+    // 给更新的小组添加反馈动画
+    if (record.group === null) {
+        document.querySelectorAll('.score-value').forEach(element => {
+            addFeedback(element);
+        });
+    } else {
+        const scoreElement = document.querySelector(`.score-group[data-group="${record.group}"] .score-value`);
+        if (scoreElement) {
+            addFeedback(scoreElement);
+        }
+    }
+    
+    return true;
 }
 
 // 保存数据到localStorage
@@ -868,11 +1082,14 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
         button.className = 'popup-button';
         button.textContent = type === 'add' ? `+${value}` : `-${value}`;
         button.addEventListener('click', function() {
+            const beforeScore = scoreData.groups[group] || 0;
             if (type === 'add') {
-                scoreData.groups[group] = (scoreData.groups[group] || 0) + value;
+                scoreData.groups[group] = beforeScore + value;
             } else {
-                scoreData.groups[group] = Math.max(0, (scoreData.groups[group] || 0) - value);
+                scoreData.groups[group] = Math.max(0, beforeScore - value);
             }
+            const afterScore = scoreData.groups[group];
+            addHistoryRecord(scoreData, type, group, beforeScore, afterScore);
             saveData(scoreData);
             
             // 缓存DOM引用，减少DOM查询
@@ -935,12 +1152,15 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
             alert('请输入1-100之间的有效数字！');
             return;
         }
-        
+
+        const beforeScore = scoreData.groups[group] || 0;
         if (type === 'add') {
-            scoreData.groups[group] = (scoreData.groups[group] || 0) + customValue;
+            scoreData.groups[group] = beforeScore + customValue;
         } else {
-            scoreData.groups[group] = Math.max(0, (scoreData.groups[group] || 0) - customValue);
+            scoreData.groups[group] = Math.max(0, beforeScore - customValue);
         }
+        const afterScore = scoreData.groups[group];
+        addHistoryRecord(scoreData, type, group, beforeScore, afterScore);
         saveData(scoreData);
         
         // 缓存DOM引用，减少DOM查询
@@ -1275,6 +1495,15 @@ function showUpdateNotification(message) {
 
 // 主函数
 function init() {
+    // 检查版本更新
+    const needsVersionUpdate = checkVersionUpdate();
+    if (needsVersionUpdate) {
+        const lastViewVersion = localStorage.getItem(LAST_VIEW_VERSION_KEY) || '旧版本';
+        setTimeout(() => {
+            showVersionUpdatePopup(lastViewVersion, CURRENT_VERSION);
+        }, 500);
+    }
+    
     // 初始化性能模式（需要在其他初始化之前）
     initPerformanceMode();
     
@@ -1309,7 +1538,9 @@ function init() {
                 createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('score-reset')) {
                 createConfirmPopup('确认重置', '确定要重置该小组的积分吗？', () => {
+                    const beforeScore = scoreData.groups[group] || 0;
                     scoreData.groups[group] = 0;
+                    addHistoryRecord(scoreData, 'reset', group, beforeScore, 0);
                     saveData(scoreData);
                     
                     const scoreElement = scoreGroup.querySelector('.score-value');
@@ -1342,7 +1573,9 @@ function init() {
                     return;
                 }
                 
+                const beforeScore = scoreData.groups[group] || 0;
                 scoreData.groups[group] = scoreValue;
+                addHistoryRecord(scoreData, 'save', group, beforeScore, scoreValue);
                 saveData(scoreData);
                 
                 const scoreElement = scoreGroup.querySelector('.score-value');
@@ -1364,6 +1597,7 @@ function init() {
                     for (let i = 1; i <= 7; i++) {
                         scoreData.groups[i.toString()] = 0;
                     }
+                    clearHistory(scoreData);
                     saveData(scoreData);
                     
                     document.querySelectorAll('.score-value').forEach(element => {
@@ -1414,13 +1648,27 @@ function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedbac
         button.className = 'popup-button';
         button.textContent = type === 'add' ? `+${value}` : `-${value}`;
         button.addEventListener('click', function() {
+            // 保存所有小组的分数
+            const beforeScores = {};
+            for (let i = 1; i <= 7; i++) {
+                beforeScores[i.toString()] = scoreData.groups[i.toString()] || 0;
+            }
+            
             for (let i = 1; i <= 7; i++) {
                 if (type === 'add') {
-                    scoreData.groups[i.toString()] = (scoreData.groups[i.toString()] || 0) + value;
+                    scoreData.groups[i.toString()] = beforeScores[i.toString()] + value;
                 } else {
-                    scoreData.groups[i.toString()] = Math.max(0, (scoreData.groups[i.toString()] || 0) - value);
+                    scoreData.groups[i.toString()] = Math.max(0, beforeScores[i.toString()] - value);
                 }
             }
+            
+            // 保存所有小组的新分数
+            const afterScores = {};
+            for (let i = 1; i <= 7; i++) {
+                afterScores[i.toString()] = scoreData.groups[i.toString()] || 0;
+            }
+            
+            addHistoryRecord(scoreData, type + '-all', null, beforeScores, afterScores);
             saveData(scoreData);
             
             for (let i = 1; i <= 7; i++) {
@@ -1528,6 +1776,20 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     });
     buttonContainer.appendChild(scoreValueManagementButton);
     
+    // 查看历史记录
+    const historyButton = document.createElement('button');
+    historyButton.className = 'popup-button';
+    historyButton.textContent = '查看历史记录';
+    historyButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback);
+        }, 400);
+    });
+    buttonContainer.appendChild(historyButton);
+    
     // 评比跳转网址设置
     const evaluationUrlSection = document.createElement('div');
     evaluationUrlSection.style.cssText = 'margin: 15px 0; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px;';
@@ -1618,7 +1880,8 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         const wallpaperSettings = initWallpaperSettings();
         const exportData = {
             groups: scoreData.groups,
-            wallpaper: wallpaperSettings
+            wallpaper: wallpaperSettings,
+            history: scoreData.history
         };
         const dataStr = JSON.stringify(exportData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
@@ -1654,7 +1917,16 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
                 try {
                     const importedData = JSON.parse(e.target.result);
                     if (importedData && importedData.groups) {
-                        scoreData = importedData;
+                        // 保留原有的历史记录结构
+                        if (!scoreData.history) {
+                            scoreData.history = [];
+                        }
+                        // 更新 groups 数据
+                        scoreData.groups = importedData.groups;
+                        // 如果导入的数据包含历史记录，也保留它
+                        if (importedData.history) {
+                            scoreData.history = importedData.history;
+                        }
                         saveData(scoreData);
                         loadDataToPage(scoreData);
                         // 导入壁纸设置
@@ -1839,6 +2111,124 @@ function createEvaluateResultPopup(message, onClose) {
     document.body.appendChild(overlay);
 }
 
+// 创建历史记录弹窗
+function createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+    
+    const title = document.createElement('h3');
+    title.textContent = '操作历史';
+    popup.appendChild(title);
+    
+    // 历史记录内容区域
+    const historyContent = document.createElement('div');
+    historyContent.style.cssText = 'max-height: 400px; overflow-y: auto; margin: 15px 0; border: 1px solid #e0e0e0; border-radius: 8px; padding: 10px;';
+    
+    if (!scoreData.history || scoreData.history.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.textContent = '暂无历史记录';
+        emptyMessage.style.cssText = 'text-align: center; padding: 40px; color: #999;';
+        historyContent.appendChild(emptyMessage);
+    } else {
+        // 反向遍历历史记录，最新的在最上面
+        for (let i = scoreData.history.length - 1; i >= 0; i--) {
+            const record = scoreData.history[i];
+            const recordIndex = i;
+            
+            const recordItem = document.createElement('div');
+            recordItem.style.cssText = 'padding: 12px; border-bottom: 1px solid #f0f0f0;';
+            if (i > 0) recordItem.style.borderTop = 'none';
+            
+            // 操作类型和小组
+            const actionInfo = document.createElement('div');
+            actionInfo.style.cssText = 'font-weight: 600; margin-bottom: 4px;';
+            
+            const groupName = record.group === null ? '全员' : `小组 ${record.group}`;
+            actionInfo.textContent = `${formatActionType(record.type)} - ${groupName}`;
+            recordItem.appendChild(actionInfo);
+            
+            // 时间
+            const timeInfo = document.createElement('div');
+            timeInfo.style.cssText = 'font-size: 12px; color: #666; margin-bottom: 4px;';
+            timeInfo.textContent = formatTimestamp(record.timestamp);
+            recordItem.appendChild(timeInfo);
+            
+            // 分数变化
+            const scoreChange = document.createElement('div');
+            scoreChange.style.cssText = 'font-size: 14px; color: #333;';
+            
+            if (record.group === null) {
+                // 全员操作，显示简要信息
+                scoreChange.textContent = '所有小组分数已更新';
+            } else {
+                scoreChange.textContent = `${record.before} → ${record.after}`;
+            }
+            recordItem.appendChild(scoreChange);
+            
+            // 撤销按钮
+            const undoButton = document.createElement('button');
+            undoButton.className = 'popup-button';
+            undoButton.textContent = '撤销';
+            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px; background: #ff9800;';
+            undoButton.addEventListener('click', function() {
+                createConfirmPopup('确认撤销', '确定要撤销这条操作吗？', function() {
+                    if (undoHistoryRecord(scoreData, recordIndex, saveData, loadDataToPage, addFeedback)) {
+                        // 重新创建新的历史记录弹窗
+                        overlay.classList.add('closing');
+                        popup.classList.add('closing');
+                        setTimeout(() => {
+                            document.body.removeChild(overlay);
+                            createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback);
+                        }, 400);
+                    }
+                });
+            });
+            recordItem.appendChild(undoButton);
+            
+            historyContent.appendChild(recordItem);
+        }
+    }
+    
+    popup.appendChild(historyContent);
+    
+    // 关闭按钮
+    const buttonContainer = document.createElement('div');
+    buttonContainer.className = 'popup-buttons';
+    
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-button';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+        }, 400);
+    });
+    buttonContainer.appendChild(closeButton);
+    
+    popup.appendChild(buttonContainer);
+    overlay.appendChild(popup);
+    
+    // 添加滚动事件处理，阻止背景页面滚动
+    const handleScroll = (e) => {
+        // 检查弹窗内部是否有滚动条
+        const hasScroll = popup.scrollHeight > popup.clientHeight;
+        if (!hasScroll) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+    
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+    
+    document.body.appendChild(overlay);
+}
+
 // 评比分数
 function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     let maxScore = -1;
@@ -1857,6 +2247,7 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
             for (let i = 1; i <= 7; i++) {
                 scoreData.groups[i.toString()] = 0;
             }
+            clearHistory(scoreData);
             saveData(scoreData);
             
             document.querySelectorAll('.score-value').forEach(element => {
