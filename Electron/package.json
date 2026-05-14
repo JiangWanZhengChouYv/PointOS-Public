@@ -1,0 +1,62 @@
+{
+  "name": "class-score-system",
+  "version": "1.4.0",
+  "description": "班级积分管理系统 - 桌面版",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac --universal",
+    "build:win64": "electron-builder --win --x64",
+    "build:win32": "electron-builder --win --ia32",
+    "build:all": "npm run build:mac && npm run build:win64 && npm run build:win32"
+  },
+  "keywords": [
+    "class",
+    "score",
+    "management",
+    "electron"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^42.0.1",
+    "electron-builder": "^25.1.8",
+    "electron-packager": "^17.1.2"
+  },
+  "build": {
+    "appId": "com.classscoresystem.app",
+    "productName": "班级积分管理系统",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "style.min.css",
+      "script.min.js",
+      "wallpapers/**/*",
+      "main.js"
+    ],
+    "asar": false,
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": "universal"
+        }
+      ],
+      "category": "public.app-category.education"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        }
+      ],
+      "sign": null
+    }
+  }
+}

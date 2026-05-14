@@ -1,2 +1,4 @@
 /.trae
 .DS_Store
+Electron/node_modules/
+Electron/dist/

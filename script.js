@@ -2258,10 +2258,10 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
                 element.value = '0';
             });
             
+            // 评比完成后弹出提示（Electron构建版不支持自动跳转）
             setTimeout(() => {
-                const evaluationUrl = initEvaluationUrlSettings();
-                window.location.href = evaluationUrl;
-            }, 1000);
+                createConfirmPopup('评比完成', '当前软件版不支持自动跳转，请手动操作！', null, null);
+            }, 100);
         });
     } else {
         createEvaluateResultPopup('没有可评比的分数！');
