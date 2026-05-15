@@ -34,9 +34,34 @@
       "style.min.css",
       "script.min.js",
       "wallpapers/**/*",
-      "main.js"
+      "main.js",
+      "icon.png",
+      "icon.ico",
+      "dmg_background.png"
     ],
+    "icon": "icon.png",
     "asar": false,
+    "dmg": {
+      "title": "班级积分管理系统",
+      "background": "dmg_background.png",
+      "window": {
+        "width": 540,
+        "height": 400
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 180,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 180,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
     "mac": {
       "target": [
         {
@@ -44,7 +69,8 @@
           "arch": "universal"
         }
       ],
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "icon": "icon.png"
     },
     "win": {
       "target": [
@@ -56,6 +82,7 @@
           ]
         }
       ],
+      "icon": "icon.ico",
       "sign": null
     }
   }
