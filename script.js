@@ -9,6 +9,291 @@ const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
 const CURRENT_VERSION = '1.4.0';
 
+// GitHub Gist 云端备份配置
+const GITHUB_TOKEN_KEY = 'classScoreSystem_githubToken';
+const GIST_ID_KEY = 'classScoreSystem_gistId';
+const GIST_BACKUP_TIME_KEY = 'classScoreSystem_gistBackupTime';
+const GIST_API_URL = 'https://api.github.com/gists';
+
+// 获取 GitHub Token
+function getGitHubToken() {
+    return localStorage.getItem(GITHUB_TOKEN_KEY);
+}
+
+// 设置 GitHub Token
+function setGitHubToken(token) {
+    localStorage.setItem(GITHUB_TOKEN_KEY, token);
+}
+
+// 检查是否已配置 Token
+function isTokenConfigured() {
+    return !!getGitHubToken();
+}
+
+// GitHub Gist API 函数
+async function createGist(token, content) {
+    const response = await fetch(GIST_API_URL, {
+        method: 'POST',
+        headers: {
+            'Authorization': `token ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            description: '班级积分管理系统备份',
+            public: false,
+            files: {
+                'class-score-backup.json': {
+                    content: content
+                }
+            }
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '创建 Gist 失败');
+    }
+    
+    const data = await response.json();
+    return data.id;
+}
+
+async function updateGist(token, gistId, content) {
+    const response = await fetch(`${GIST_API_URL}/${gistId}`, {
+        method: 'PATCH',
+        headers: {
+            'Authorization': `token ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            description: '班级积分管理系统备份',
+            files: {
+                'class-score-backup.json': {
+                    content: content
+                }
+            }
+        })
+    });
+    
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '更新 Gist 失败');
+    }
+    
+    const data = await response.json();
+    return data.id;
+}
+
+async function fetchGist(token, gistId) {
+    const response = await fetch(`${GIST_API_URL}/${gistId}`, {
+        headers: {
+            'Authorization': `token ${token}`
+        }
+    });
+    
+    if (!response.ok) {
+        if (response.status === 404) {
+            throw new Error('未找到云端备份，请先备份数据');
+        }
+        const error = await response.json();
+        throw new Error(error.message || '获取 Gist 失败');
+    }
+    
+    const data = await response.json();
+    
+    if (!data.files || !data.files['class-score-backup.json']) {
+        throw new Error('Gist 文件格式错误');
+    }
+    
+    return JSON.parse(data.files['class-score-backup.json'].content);
+}
+
+function handleGistError(error, defaultMessage) {
+    if (error.message.includes('401') || error.message.includes('Bad credentials')) {
+        return 'Token 无效，请检查 Token 是否正确';
+    } else if (error.message.includes('404') || error.message.includes('Not Found')) {
+        return '未找到云端备份，请先备份数据';
+    } else if (error.message.includes('403') || error.message.includes('rate limit')) {
+        return 'API 配额超限，请稍后再试';
+    } else if (error.message.includes('NetworkError') || error.message.includes('Failed to fetch')) {
+        return '网络错误，请检查网络连接';
+    }
+    return defaultMessage || error.message || '未知错误';
+}
+
+// 备份到云端
+async function backupToCloud() {
+    try {
+        const existingData = localStorage.getItem(STORAGE_KEY);
+        const scoreData = JSON.parse(existingData);
+        const wallpaperSettings = JSON.parse(localStorage.getItem(WALLPAPER_STORAGE_KEY) || '{}');
+        const evaluationUrl = localStorage.getItem(EVALUATION_URL_STORAGE_KEY) || '';
+        
+        const backupData = {
+            appVersion: CURRENT_VERSION,
+            backupTime: new Date().toISOString(),
+            groups: scoreData.groups,
+            history: scoreData.history || [],
+            wallpaper: wallpaperSettings,
+            evaluationUrl: evaluationUrl
+        };
+        
+        const content = JSON.stringify(backupData, null, 2);
+        const gistId = localStorage.getItem(GIST_ID_KEY);
+        const token = getGitHubToken();
+        
+        if (!token) {
+            return { success: false, error: '请先在设置中配置 GitHub Token' };
+        }
+        
+        if (gistId) {
+            await updateGist(token, gistId, content);
+        } else {
+            const newGistId = await createGist(token, content);
+            localStorage.setItem(GIST_ID_KEY, newGistId);
+        }
+        
+        localStorage.setItem(GIST_BACKUP_TIME_KEY, new Date().toISOString());
+        
+        return { success: true, gistId: gistId || localStorage.getItem(GIST_ID_KEY) };
+    } catch (error) {
+        return { success: false, error: handleGistError(error, '备份失败') };
+    }
+}
+
+// 从云端恢复
+async function restoreFromCloud() {
+    try {
+        const gistId = localStorage.getItem(GIST_ID_KEY);
+        if (!gistId) {
+            return { success: false, error: '未找到云端备份记录，请先备份数据' };
+        }
+        
+        const token = getGitHubToken();
+        if (!token) {
+            return { success: false, error: '请先在设置中配置 GitHub Token' };
+        }
+        
+        const backupData = await fetchGist(token, gistId);
+        
+        if (!backupData.groups) {
+            return { success: false, error: '云端数据格式错误' };
+        }
+        
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            groups: backupData.groups,
+            history: backupData.history || []
+        }));
+        
+        if (backupData.wallpaper) {
+            localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(backupData.wallpaper));
+        }
+        
+        if (backupData.evaluationUrl) {
+            localStorage.setItem(EVALUATION_URL_STORAGE_KEY, backupData.evaluationUrl);
+        }
+        
+        return { success: true, backupTime: backupData.backupTime };
+    } catch (error) {
+        return { success: false, error: handleGistError(error, '恢复失败') };
+    }
+}
+
+// Toast 提示函数
+function showToast(message, type = 'info', duration = 3000) {
+    const existingToast = document.querySelector('.toast-notification');
+    if (existingToast) {
+        existingToast.remove();
+    }
+    
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification';
+    toast.textContent = message;
+    
+    const bgColors = {
+        success: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+        error: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+        info: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+        warning: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+    };
+    
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 12px 24px;
+        background: ${bgColors[type] || bgColors.info};
+        color: white;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 100000;
+        animation: toastSlideIn 0.3s ease-out;
+        max-width: 90%;
+        text-align: center;
+    `;
+    
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes toastSlideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+        @keyframes toastSlideOut {
+            from {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'toastSlideOut 0.3s ease-out';
+        setTimeout(() => {
+            toast.remove();
+            style.remove();
+        }, 300);
+    }, duration);
+}
+
+// 获取云端备份状态
+function getCloudBackupStatus() {
+    const tokenConfigured = isTokenConfigured();
+    const gistId = localStorage.getItem(GIST_ID_KEY);
+    const backupTime = localStorage.getItem(GIST_BACKUP_TIME_KEY);
+    
+    if (!tokenConfigured) {
+        return { status: 'not_configured', message: '未配置 Token' };
+    }
+    
+    if (!gistId) {
+        return { status: 'not_backed_up', message: '未备份' };
+    }
+    
+    if (backupTime) {
+        const date = new Date(backupTime);
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        return { status: 'backed_up', message: `已备份 (${dateStr})` };
+    }
+    
+    return { status: 'backed_up', message: '已备份' };
+}
+
 // 性能模式相关
 let isPerformanceModeEnabled = false;
 let devicePerformanceInfo = null;
@@ -1966,6 +2251,107 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         }, 400);
     });
     buttonContainer.appendChild(versionLogButton);
+    
+    // 配置 GitHub Token
+    const tokenConfigButton = document.createElement('button');
+    tokenConfigButton.className = 'popup-button';
+    tokenConfigButton.textContent = '🔑 配置 GitHub Token';
+    tokenConfigButton.style.backgroundColor = '#6366f1';
+    tokenConfigButton.addEventListener('click', function() {
+        const currentToken = getGitHubToken();
+        const token = prompt('请输入你的 GitHub Personal Access Token：\n\n提示：\n1. 访问 https://github.com/settings/tokens 生成 Token\n2. 勾选 "gist" 权限\n3. Token 格式: ghp_xxxxxxxx', currentToken || '');
+        
+        if (token !== null) {
+            if (token.trim()) {
+                setGitHubToken(token.trim());
+                showToast('✅ Token 配置成功！', 'success');
+                const status = getCloudBackupStatus();
+                statusDisplay.textContent = status.message;
+                statusDisplay.style.color = status.status === 'backed_up' ? '#10b981' : '#9ca3af';
+            } else {
+                showToast('❌ Token 不能为空', 'error');
+            }
+        }
+    });
+    buttonContainer.appendChild(tokenConfigButton);
+    
+    // 备份到云端
+    const backupButton = document.createElement('button');
+    backupButton.className = 'popup-button';
+    backupButton.textContent = '📤 备份到云端';
+    backupButton.style.backgroundColor = '#6366f1';
+    backupButton.addEventListener('click', async function() {
+        backupButton.disabled = true;
+        backupButton.textContent = '备份中...';
+        
+        const result = await backupToCloud();
+        
+        if (result.success) {
+            showToast('✅ 备份成功！数据已保存到云端', 'success');
+            const status = getCloudBackupStatus();
+            statusDisplay.textContent = status.message;
+            statusDisplay.style.color = '#10b981';
+        } else {
+            showToast('❌ ' + result.error, 'error');
+        }
+        
+        backupButton.disabled = false;
+        backupButton.textContent = '📤 备份到云端';
+    });
+    buttonContainer.appendChild(backupButton);
+    
+    // 从云端恢复
+    const restoreButton = document.createElement('button');
+    restoreButton.className = 'popup-button';
+    restoreButton.textContent = '📥 从云端恢复';
+    restoreButton.style.backgroundColor = '#f59e0b';
+    restoreButton.addEventListener('click', async function() {
+        const gistId = localStorage.getItem(GIST_ID_KEY);
+        if (!gistId) {
+            showToast('❌ 未找到云端备份记录', 'error');
+            return;
+        }
+        
+        const confirmed = confirm('⚠️ 确认要从云端恢复数据吗？\n\n此操作将覆盖当前所有数据！');
+        if (!confirmed) return;
+        
+        restoreButton.disabled = true;
+        restoreButton.textContent = '恢复中...';
+        
+        const result = await restoreFromCloud();
+        
+        if (result.success) {
+            showToast('✅ 恢复成功！数据已从云端下载', 'success');
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            showToast('❌ ' + result.error, 'error');
+            restoreButton.disabled = false;
+            restoreButton.textContent = '📥 从云端恢复';
+        }
+    });
+    buttonContainer.appendChild(restoreButton);
+    
+    // 云端状态显示
+    const statusContainer = document.createElement('div');
+    statusContainer.style.cssText = 'margin-top: 15px; padding: 10px; background: #f3f4f6; border-radius: 8px; text-align: center;';
+    const statusLabel = document.createElement('span');
+    statusLabel.textContent = '☁️ 云端状态：';
+    statusLabel.style.cssText = 'font-size: 14px; color: #6b7280;';
+    statusContainer.appendChild(statusLabel);
+    const statusDisplay = document.createElement('span');
+    const status = getCloudBackupStatus();
+    statusDisplay.textContent = status.message;
+    
+    const statusColors = {
+        'backed_up': '#10b981',
+        'not_backed_up': '#f59e0b',
+        'not_configured': '#9ca3af'
+    };
+    statusDisplay.style.cssText = `font-size: 14px; font-weight: 600; color: ${statusColors[status.status] || '#9ca3af'}; margin-left: 5px;`;
+    statusContainer.appendChild(statusDisplay);
+    buttonContainer.appendChild(statusContainer);
     
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
