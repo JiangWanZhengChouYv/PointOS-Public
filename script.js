@@ -1,13 +1,13 @@
 // 班级积分管理系统
-// 版本: 1.5.0
+// 版本: 1.6.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
 const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
-const EVALUATION_URL_STORAGE_KEY = 'classScoreSystem_evaluationUrl';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
+const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.5.0';
+const CURRENT_VERSION = '1.6.0';
 
 // 数据版本与小组数量配置
 const DATA_VERSION = 2;
@@ -141,7 +141,6 @@ async function backupToCloud() {
         }
         const scoreData = migrateData(parsedData);
         const wallpaperSettings = JSON.parse(localStorage.getItem(WALLPAPER_STORAGE_KEY) || '{}');
-        const evaluationUrl = localStorage.getItem(EVALUATION_URL_STORAGE_KEY) || '';
         
         const backupData = {
             version: scoreData.version,
@@ -151,8 +150,7 @@ async function backupToCloud() {
             groups: scoreData.groups,
             rules: scoreData.rules,
             history: scoreData.history || [],
-            wallpaper: wallpaperSettings,
-            evaluationUrl: evaluationUrl
+            wallpaper: wallpaperSettings
         };
         
         const content = JSON.stringify(backupData, null, 2);
@@ -203,10 +201,6 @@ async function restoreFromCloud() {
         
         if (backupData.wallpaper) {
             localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(backupData.wallpaper));
-        }
-        
-        if (backupData.evaluationUrl) {
-            localStorage.setItem(EVALUATION_URL_STORAGE_KEY, backupData.evaluationUrl);
         }
         
         return { success: true, backupTime: backupData.backupTime };
@@ -398,6 +392,35 @@ function togglePerformanceMode() {
     return newMode;
 }
 
+// Impeccable 精致模式相关（默认关闭，需在设置中手动开启）
+let isImpeccableModeEnabled = false;
+
+// 初始化 Impeccable 精致模式
+function initImpeccableMode() {
+    const savedMode = localStorage.getItem(IMPECCABLE_MODE_KEY);
+    isImpeccableModeEnabled = savedMode === 'true';
+    applyImpeccableMode(isImpeccableModeEnabled);
+    return isImpeccableModeEnabled;
+}
+
+// 应用 Impeccable 精致模式
+function applyImpeccableMode(enabled) {
+    if (enabled) {
+        document.body.classList.add('impeccable-mode');
+    } else {
+        document.body.classList.remove('impeccable-mode');
+    }
+    isImpeccableModeEnabled = enabled;
+}
+
+// 切换 Impeccable 精致模式
+function toggleImpeccableMode() {
+    const newMode = !isImpeccableModeEnabled;
+    applyImpeccableMode(newMode);
+    localStorage.setItem(IMPECCABLE_MODE_KEY, newMode.toString());
+    return newMode;
+}
+
 // 获取设备性能描述
 function getPerformanceDescription() {
     if (!devicePerformanceInfo) return '未检测';
@@ -416,6 +439,34 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.6.0',
+        date: '2026-09-21',
+        changes: [
+            '【新增功能】设置弹窗改为顶部标签页，分为「界面与显示」「计分与小组」「备份与数据」「关于」四类',
+            '【功能优化】贡献榜移到主界面顶部控制栏，设置弹窗内不再显示贡献榜按钮',
+            '【界面优化】新增标签页样式，窄屏下标签可横向滚动或换行，面板不溢出'
+        ]
+    },
+    {
+        version: '1.5.2',
+        date: '2026-09-21',
+        changes: [
+            '【新增功能】新增 Impeccable 精致模式开关，默认关闭，可在设置中开启专属精致界面（玻璃质感、光影与微交互）',
+            '【功能优化】Impeccable 精致模式与性能模式相互独立，性能模式开启时仍保持精简'
+        ]
+    },
+    {
+        version: '1.5.1',
+        date: '2026-09-21',
+        changes: [
+            '【版本更新】更新系统版本至1.5.1',
+            '【功能优化】移除设置中无效的外部链接配置项（软件版不可用）',
+            '【功能优化】小组卡片「增加/减少」改为两步计分：先选「小组/成员」，再选规则或自定义分值',
+            '【功能优化】选择成员计分时，小组分数与该成员贡献等量变化（可为负）',
+            '【功能优化】保留成员管理中的快捷计分入口，小组无成员时给出提示'
+        ]
+    },
     {
         version: '1.5.0',
         date: '2026-09-21',
@@ -437,14 +488,6 @@ const VERSION_LOGS = [
             '【版本更新】更新系统版本至1.4.0',
             '【新增功能】增加版本更新自动检测功能，首次运行或版本更新后自动弹出版本更新日志',
             '【新增功能】设置中的版本日志同步更新至1.4.0'
-        ]
-    },
-    {
-        version: '1.3.1',
-        date: '2026-04-25',
-        changes: [
-            '【版本更新】更新系统版本至1.3.1',
-            '【新增功能】实现评比跳转网址设置功能，可在设置菜单中自定义跳转网址'
         ]
     },
     {
@@ -545,22 +588,6 @@ function initWallpaperSettings() {
 // 保存壁纸设置
 function saveWallpaperSettings(settings) {
     localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(settings));
-}
-
-// 初始化评比跳转网址设置
-function initEvaluationUrlSettings() {
-    const existingSettings = localStorage.getItem(EVALUATION_URL_STORAGE_KEY);
-    if (!existingSettings) {
-        const defaultUrl = 'https://bjcwy.rxtw666.cn/login';
-        localStorage.setItem(EVALUATION_URL_STORAGE_KEY, defaultUrl);
-        return defaultUrl;
-    }
-    return existingSettings;
-}
-
-// 保存评比跳转网址设置
-function saveEvaluationUrlSettings(url) {
-    localStorage.setItem(EVALUATION_URL_STORAGE_KEY, url);
 }
 
 // 检查本地版本更新
@@ -2158,6 +2185,9 @@ function init() {
     // 初始化性能模式（需要在其他初始化之前）
     initPerformanceMode();
     
+    // 初始化 Impeccable 精致模式（默认关闭）
+    initImpeccableMode();
+    
     const wallpaperSettings = initWallpaperSettings();
     if (!isPerformanceModeEnabled) {
         applyWallpaper(wallpaperSettings);
@@ -2185,9 +2215,9 @@ function init() {
             const group = scoreGroup.dataset.group;
             
             if (target.classList.contains('score-add')) {
-                createPopup('add', group, scoreData, saveData, loadDataToPage, addFeedback);
+                createScopeChoicePopup('add', group, scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('score-subtract')) {
-                createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
+                createScopeChoicePopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('score-reset')) {
                 createConfirmPopup('确认重置', '确定要重置该小组的积分吗？', () => {
                     const beforeScore = getGroupScore(scoreData, group);
@@ -2263,6 +2293,8 @@ function init() {
                 createGlobalPopup('subtract', scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('evaluate')) {
                 evaluateScore(scoreData, saveData, loadDataToPage, addFeedback);
+            } else if (target.classList.contains('contribution-rank')) {
+                createContributionRankPopup(scoreData);
             }
         });
     }
@@ -2691,7 +2723,7 @@ function createMemberManagementPopup(scoreData, group, saveData, loadDataToPage)
 }
 
 // 创建成员贡献计分弹出层（个人计分同时计入小组分数与个人贡献）
-function createMemberScorePopup(scoreData, group, member, saveData, loadDataToPage, addFeedback) {
+function createMemberScorePopup(scoreData, group, member, saveData, loadDataToPage, addFeedback, direction) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
     const popup = document.createElement('div');
@@ -2738,7 +2770,140 @@ function createMemberScorePopup(scoreData, group, member, saveData, loadDataToPa
         closePopup();
     };
 
-    popup.appendChild(createScoreOptionsPanel(scoreData, 'add', applyScore));
+    popup.appendChild(createScoreOptionsPanel(scoreData, direction === 'subtract' ? 'subtract' : 'add', applyScore));
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', closePopup);
+    popup.appendChild(cancelButton);
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
+    document.body.appendChild(overlay);
+}
+
+// 创建「小组 / 成员」计分范围选择弹出层
+function createScopeChoicePopup(direction, group, scoreData, saveData, loadDataToPage, addFeedback) {
+    const isSubtract = direction === 'subtract';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = `计分 - ${getGroupName(scoreData, group)}`;
+    popup.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.className = 'member-coord';
+    hint.textContent = '请选择计分对象';
+    popup.appendChild(hint);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    const groupButton = document.createElement('button');
+    groupButton.className = 'popup-button';
+    groupButton.textContent = isSubtract ? '小组减分' : '小组加分';
+    groupButton.addEventListener('click', () => {
+        closePopup();
+        setTimeout(() => {
+            createPopup(direction, group, scoreData, saveData, loadDataToPage, addFeedback);
+        }, 400);
+    });
+    popup.appendChild(groupButton);
+
+    const memberButton = document.createElement('button');
+    memberButton.className = 'popup-button';
+    memberButton.textContent = isSubtract ? '成员减分' : '成员加分';
+    memberButton.addEventListener('click', () => {
+        if (getGroupMembers(scoreData, group).length === 0) {
+            showToast('⚠️ 该小组暂无成员，请先在成员管理中录入', 'warning');
+            return;
+        }
+        closePopup();
+        setTimeout(() => {
+            createMemberSelectPopup(direction, group, scoreData, saveData, loadDataToPage, addFeedback);
+        }, 400);
+    });
+    popup.appendChild(memberButton);
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', closePopup);
+    popup.appendChild(cancelButton);
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
+    document.body.appendChild(overlay);
+}
+
+// 创建成员选择弹出层（选定成员后进入规则面板计分）
+function createMemberSelectPopup(direction, group, scoreData, saveData, loadDataToPage, addFeedback) {
+    const isSubtract = direction === 'subtract';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = `选择成员 - ${getGroupName(scoreData, group)}`;
+    popup.appendChild(title);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    const list = document.createElement('div');
+    list.className = 'member-list';
+
+    getGroupMembers(scoreData, group).forEach(member => {
+        const button = document.createElement('button');
+        button.className = 'popup-button';
+        button.style.cssText = 'width: 100%; margin: 4px 0;';
+        button.textContent = getMemberDisplayName(member);
+        button.addEventListener('click', () => {
+            closePopup();
+            setTimeout(() => {
+                createMemberScorePopup(scoreData, group, member, saveData, loadDataToPage, addFeedback, isSubtract ? 'subtract' : 'add');
+            }, 400);
+        });
+        list.appendChild(button);
+    });
+    popup.appendChild(list);
 
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
@@ -2945,12 +3110,64 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     const title = document.createElement('h3');
     title.textContent = '设置';
     popup.appendChild(title);
+
+    // 顶部标签栏
+    const settingsTabs = document.createElement('div');
+    settingsTabs.className = 'settings-tabs';
+
+    // 内容面板容器
+    const settingsPanels = document.createElement('div');
+    settingsPanels.className = 'settings-panels';
+
+    const settingsTabsConfig = [
+        { key: 'display', label: '界面与显示' },
+        { key: 'scoring', label: '计分与小组' },
+        { key: 'data', label: '备份与数据' },
+        { key: 'about', label: '关于' }
+    ];
+
+    const settingsPanelMap = {};
+
+    settingsTabsConfig.forEach(function(tabConfig, index) {
+        const tabButton = document.createElement('button');
+        tabButton.className = 'settings-tab' + (index === 0 ? ' active' : '');
+        tabButton.dataset.tab = tabConfig.key;
+        tabButton.textContent = tabConfig.label;
+
+        const panel = document.createElement('div');
+        panel.className = 'settings-panel' + (index === 0 ? ' active' : '');
+        panel.dataset.panel = tabConfig.key;
+
+        tabButton.addEventListener('click', function() {
+            settingsTabs.querySelectorAll('.settings-tab').forEach(function(btn) {
+                btn.classList.remove('active');
+            });
+            tabButton.classList.add('active');
+
+            settingsPanels.querySelectorAll('.settings-panel').forEach(function(p) {
+                p.classList.remove('active');
+            });
+            panel.classList.add('active');
+        });
+
+        settingsTabs.appendChild(tabButton);
+        settingsPanels.appendChild(panel);
+        settingsPanelMap[tabConfig.key] = panel;
+    });
+
+    const displayPanel = settingsPanelMap.display;
+    const scoringPanel = settingsPanelMap.scoring;
+    const dataPanel = settingsPanelMap.data;
+    const aboutPanel = settingsPanelMap.about;
+
+    popup.appendChild(settingsTabs);
+    popup.appendChild(settingsPanels);
     
 
     
-    // 按钮容器
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'popup-buttons';
+    // 界面与显示面板按钮容器
+    const displayButtonContainer = document.createElement('div');
+    displayButtonContainer.className = 'popup-buttons';
     
     // 自定义壁纸
     const wallpaperButton = document.createElement('button');
@@ -2964,7 +3181,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             createWallpaperPopup(initWallpaperSettings());
         }, 400);
     });
-    buttonContainer.appendChild(wallpaperButton);
+    displayButtonContainer.appendChild(wallpaperButton);
     
     // 规则管理
     const ruleManagementButton = document.createElement('button');
@@ -2978,7 +3195,10 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             createRuleManagementPopup(scoreData, saveData);
         }, 400);
     });
-    buttonContainer.appendChild(ruleManagementButton);
+    const scoringButtonContainer = document.createElement('div');
+    scoringButtonContainer.className = 'popup-buttons';
+    scoringButtonContainer.appendChild(ruleManagementButton);
+    scoringPanel.appendChild(scoringButtonContainer);
     
     // 小组设置
     const groupSettingsButton = document.createElement('button');
@@ -2992,7 +3212,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             createGroupSettingsPopup(scoreData, saveData, loadDataToPage);
         }, 400);
     });
-    buttonContainer.appendChild(groupSettingsButton);
+    scoringButtonContainer.appendChild(groupSettingsButton);
     
     // 查看历史记录
     const historyButton = document.createElement('button');
@@ -3006,59 +3226,10 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback);
         }, 400);
     });
-    buttonContainer.appendChild(historyButton);
-    
-    // 贡献榜
-    const contributionRankButton = document.createElement('button');
-    contributionRankButton.className = 'popup-button';
-    contributionRankButton.textContent = '贡献榜';
-    contributionRankButton.addEventListener('click', function() {
-        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-            createContributionRankPopup(scoreData);
-        }, 400);
-    });
-    buttonContainer.appendChild(contributionRankButton);
-    
-    // 评比跳转网址设置
-    const evaluationUrlSection = document.createElement('div');
-    evaluationUrlSection.style.cssText = 'margin: 15px 0; padding: 15px; border: 1px solid #e0e0e0; border-radius: 8px;';
-    
-    const evaluationUrlTitle = document.createElement('h4');
-    evaluationUrlTitle.textContent = '评比跳转网址';
-    evaluationUrlTitle.style.cssText = 'margin: 0 0 10px 0; font-size: 14px; font-weight: 600;';
-    evaluationUrlSection.appendChild(evaluationUrlTitle);
-    
-    const evaluationUrlInput = document.createElement('input');
-    evaluationUrlInput.type = 'text';
-    evaluationUrlInput.value = initEvaluationUrlSettings();
-    evaluationUrlInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 10px;';
-    evaluationUrlSection.appendChild(evaluationUrlInput);
-    
-    const saveEvaluationUrlButton = document.createElement('button');
-    saveEvaluationUrlButton.className = 'popup-button';
-    saveEvaluationUrlButton.textContent = '保存';
-    saveEvaluationUrlButton.style.cssText = 'width: 100%;';
-    saveEvaluationUrlButton.addEventListener('click', function() {
-        const url = evaluationUrlInput.value.trim();
-        if (!url) {
-            alert('请输入跳转网址！');
-            return;
-        }
-        
-        // URL格式验证
-        try {
-            new URL(url);
-            saveEvaluationUrlSettings(url);
-            alert('保存成功！');
-        } catch (error) {
-            alert('请输入有效的URL格式！');
-        }
-    });
-    evaluationUrlSection.appendChild(saveEvaluationUrlButton);
-    popup.appendChild(evaluationUrlSection);
+    const dataButtonContainer = document.createElement('div');
+    dataButtonContainer.className = 'popup-buttons';
+    dataButtonContainer.appendChild(historyButton);
+    dataPanel.appendChild(dataButtonContainer);
     
     // 性能模式设置
     const performanceSection = document.createElement('div');
@@ -3101,7 +3272,46 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     performanceInfo.appendChild(deviceInfoText);
     
     performanceSection.appendChild(performanceInfo);
-    popup.appendChild(performanceSection);
+    displayPanel.appendChild(performanceSection);
+    
+    // Impeccable 精致模式设置（独立开关，默认关闭）
+    const impeccableSection = document.createElement('div');
+    impeccableSection.className = 'performance-mode-section impeccable-mode-section';
+    
+    const impeccableTitle = document.createElement('h4');
+    impeccableTitle.textContent = 'Impeccable 精致模式';
+    impeccableSection.appendChild(impeccableTitle);
+    
+    const impeccableToggle = document.createElement('div');
+    impeccableToggle.className = 'performance-mode-toggle';
+    
+    const impeccableLabel = document.createElement('label');
+    impeccableLabel.textContent = '启用 Impeccable 精致界面（玻璃质感、光影与微交互）';
+    impeccableLabel.setAttribute('for', 'impeccable-toggle');
+    
+    const impeccableCheckbox = document.createElement('input');
+    impeccableCheckbox.type = 'checkbox';
+    impeccableCheckbox.id = 'impeccable-toggle';
+    impeccableCheckbox.checked = isImpeccableModeEnabled;
+    impeccableCheckbox.addEventListener('change', function() {
+        toggleImpeccableMode();
+        impeccableInfoText.textContent = isImpeccableModeEnabled ? '已启用 Impeccable 精致模式' : '已关闭 Impeccable 精致模式（默认）';
+    });
+    
+    impeccableToggle.appendChild(impeccableLabel);
+    impeccableToggle.appendChild(impeccableCheckbox);
+    impeccableSection.appendChild(impeccableToggle);
+    
+    const impeccableInfo = document.createElement('div');
+    impeccableInfo.className = 'performance-info';
+    
+    const impeccableInfoText = document.createElement('div');
+    impeccableInfoText.textContent = isImpeccableModeEnabled ? '已启用 Impeccable 精致模式' : '已关闭 Impeccable 精致模式（默认）';
+    impeccableInfo.appendChild(impeccableInfoText);
+    
+    impeccableSection.appendChild(impeccableInfo);
+    displayPanel.appendChild(impeccableSection);
+    displayPanel.appendChild(displayButtonContainer);
     
     // 导出JSON
     const exportButton = document.createElement('button');
@@ -3132,7 +3342,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             document.body.removeChild(overlay);
         }, 400);
     });
-    buttonContainer.appendChild(exportButton);
+    dataButtonContainer.appendChild(exportButton);
     
     // 导入JSON
     const importButton = document.createElement('button');
@@ -3184,7 +3394,27 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         });
         fileInput.click();
     });
-    buttonContainer.appendChild(importButton);
+    dataButtonContainer.appendChild(importButton);
+    
+    // 版本信息
+    const aboutInfo = document.createElement('div');
+    aboutInfo.className = 'settings-about';
+
+    const aboutVersion = document.createElement('div');
+    aboutVersion.className = 'settings-about-item';
+    aboutVersion.textContent = '版本号：' + CURRENT_VERSION;
+    aboutInfo.appendChild(aboutVersion);
+
+    const aboutAuthor = document.createElement('div');
+    aboutAuthor.className = 'settings-about-item';
+    aboutAuthor.textContent = '作者：江晚正愁余';
+    aboutInfo.appendChild(aboutAuthor);
+
+    aboutPanel.appendChild(aboutInfo);
+
+    const aboutButtonContainer = document.createElement('div');
+    aboutButtonContainer.className = 'popup-buttons';
+    aboutPanel.appendChild(aboutButtonContainer);
     
     // 版本日志
     const versionLogButton = document.createElement('button');
@@ -3198,7 +3428,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             showVersionLog();
         }, 400);
     });
-    buttonContainer.appendChild(versionLogButton);
+    aboutButtonContainer.appendChild(versionLogButton);
     
     // 配置 GitHub Token
     const tokenConfigButton = document.createElement('button');
@@ -3221,7 +3451,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             }
         }
     });
-    buttonContainer.appendChild(tokenConfigButton);
+    dataButtonContainer.appendChild(tokenConfigButton);
     
     // 备份到云端
     const backupButton = document.createElement('button');
@@ -3246,7 +3476,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         backupButton.disabled = false;
         backupButton.textContent = '📤 备份到云端';
     });
-    buttonContainer.appendChild(backupButton);
+    dataButtonContainer.appendChild(backupButton);
     
     // 从云端恢复
     const restoreButton = document.createElement('button');
@@ -3279,7 +3509,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             restoreButton.textContent = '📥 从云端恢复';
         }
     });
-    buttonContainer.appendChild(restoreButton);
+    dataButtonContainer.appendChild(restoreButton);
     
     // 云端状态显示
     const statusContainer = document.createElement('div');
@@ -3299,7 +3529,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     };
     statusDisplay.style.cssText = `font-size: 14px; font-weight: 600; color: ${statusColors[status.status] || '#9ca3af'}; margin-left: 5px;`;
     statusContainer.appendChild(statusDisplay);
-    buttonContainer.appendChild(statusContainer);
+    dataButtonContainer.appendChild(statusContainer);
     
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
@@ -3312,7 +3542,6 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         }, 400);
     });
     
-    popup.appendChild(buttonContainer);
     popup.appendChild(cancelButton);
     overlay.appendChild(popup);
     
@@ -3609,11 +3838,6 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
             document.querySelectorAll('.score-input').forEach(element => {
                 element.value = '0';
             });
-            
-            // 评比完成后弹出提示（Electron构建版不支持自动跳转）
-            setTimeout(() => {
-                createConfirmPopup('评比完成', '当前软件版不支持自动跳转，请手动操作！', null, null);
-            }, 100);
         });
     } else {
         createEvaluateResultPopup('没有可评比的分数！');
