@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.4.0
+// 版本: 1.5.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,13 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const EVALUATION_URL_STORAGE_KEY = 'classScoreSystem_evaluationUrl';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.4.0';
+const CURRENT_VERSION = '1.5.0';
+
+// 数据版本与小组数量配置
+const DATA_VERSION = 2;
+const DEFAULT_GROUP_COUNT = 7;
+const MIN_GROUP_COUNT = 1;
+const MAX_GROUP_COUNT = 20;
 
 // GitHub Gist 云端备份配置
 const GITHUB_TOKEN_KEY = 'classScoreSystem_githubToken';
@@ -125,14 +131,25 @@ function handleGistError(error, defaultMessage) {
 async function backupToCloud() {
     try {
         const existingData = localStorage.getItem(STORAGE_KEY);
-        const scoreData = JSON.parse(existingData);
+        let parsedData = null;
+        if (existingData) {
+            try {
+                parsedData = JSON.parse(existingData);
+            } catch (error) {
+                parsedData = null;
+            }
+        }
+        const scoreData = migrateData(parsedData);
         const wallpaperSettings = JSON.parse(localStorage.getItem(WALLPAPER_STORAGE_KEY) || '{}');
         const evaluationUrl = localStorage.getItem(EVALUATION_URL_STORAGE_KEY) || '';
         
         const backupData = {
+            version: scoreData.version,
             appVersion: CURRENT_VERSION,
             backupTime: new Date().toISOString(),
+            groupCount: scoreData.groupCount,
             groups: scoreData.groups,
+            rules: scoreData.rules,
             history: scoreData.history || [],
             wallpaper: wallpaperSettings,
             evaluationUrl: evaluationUrl
@@ -176,14 +193,13 @@ async function restoreFromCloud() {
         
         const backupData = await fetchGist(token, gistId);
         
-        if (!backupData.groups) {
+        if (!backupData || !backupData.groups) {
             return { success: false, error: '云端数据格式错误' };
         }
         
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            groups: backupData.groups,
-            history: backupData.history || []
-        }));
+        // 恢复走迁移，兼容旧版本备份（无 version/groupCount/rules/members）
+        const migratedData = migrateData(backupData);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedData));
         
         if (backupData.wallpaper) {
             localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(backupData.wallpaper));
@@ -400,6 +416,20 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.5.0',
+        date: '2026-09-21',
+        changes: [
+            '【版本更新】更新系统版本至1.5.0',
+            '【新增功能】支持自定义小组数量（1-20）与小组成员名称，小组卡片动态渲染',
+            '【新增功能】新增计分规则管理，可自定义规则名称与分值（分值可正可负）',
+            '【新增功能】计分弹窗改为规则列表 + 自定义分值，移除预设分值按钮',
+            '【新增功能】新增成员管理，可设置每组人数、录入成员名字，未录入时显示坐标',
+            '【新增功能】新增成员贡献系统与贡献榜（组内榜 + 跨组榜）',
+            '【功能优化】小组分数允许为负数，撤销时同步还原成员贡献',
+            '【数据兼容】数据结构升级为 v2，自动迁移旧数据；云备份与导出/导入兼容新结构'
+        ]
+    },
     {
         version: '1.4.0',
         date: '2026-05-07',
@@ -778,26 +808,193 @@ function resetWallpaper() {
 }
 
 // 初始化数据
-function initData() {
-    const existingData = localStorage.getItem(STORAGE_KEY);
-    if (existingData) {
-        const data = JSON.parse(existingData);
-        // 确保历史记录字段存在
-        if (!data.history) {
-            data.history = [];
-        }
-        return data;
+// 创建默认成员对象（未录入名字时以坐标显示）
+function createMember(group, row) {
+    return {
+        id: `m_${group}_${row}`,
+        name: '',
+        col: 1,
+        row: row,
+        contribution: 0
+    };
+}
+
+// 创建默认小组对象
+function createDefaultGroup(index) {
+    return {
+        name: `小组 ${index}`,
+        score: 0,
+        members: []
+    };
+}
+
+// 生成 n 个默认小组
+function createDefaultGroups(count) {
+    const groups = {};
+    for (let i = 1; i <= count; i++) {
+        groups[i.toString()] = createDefaultGroup(i);
     }
-    const defaultData = {
-        groups: { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0, '7': 0 },
+    return groups;
+}
+
+// 创建默认数据（v2）
+function createDefaultData() {
+    return {
+        version: DATA_VERSION,
+        groupCount: DEFAULT_GROUP_COUNT,
+        groups: createDefaultGroups(DEFAULT_GROUP_COUNT),
+        rules: [],
         history: []
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultData));
-    return defaultData;
+}
+
+// 迁移单个成员
+function migrateMember(raw, index) {
+    const member = (raw && typeof raw === 'object') ? raw : {};
+    const row = parseInt(member.row, 10) || (index + 1);
+    const col = parseInt(member.col, 10) || 1;
+    return {
+        id: member.id || `m_${col}_${row}`,
+        name: typeof member.name === 'string' ? member.name : '',
+        col: col,
+        row: row,
+        contribution: Number(member.contribution) || 0
+    };
+}
+
+// 迁移单个小组（兼容旧格式的数字分数）
+function migrateGroup(raw, index) {
+    if (raw && typeof raw === 'object') {
+        return {
+            name: (typeof raw.name === 'string' && raw.name) ? raw.name : `小组 ${index}`,
+            score: Number(raw.score) || 0,
+            members: Array.isArray(raw.members) ? raw.members.map((m, i) => migrateMember(m, i)) : []
+        };
+    }
+    return {
+        name: `小组 ${index}`,
+        score: Number(raw) || 0,
+        members: []
+    };
+}
+
+// 迁移任意版本的存储数据到 v2（幂等，可重复调用）
+function migrateData(oldData) {
+    const data = (oldData && typeof oldData === 'object') ? oldData : {};
+
+    let groupCount = parseInt(data.groupCount, 10);
+    if (isNaN(groupCount) || groupCount < MIN_GROUP_COUNT) {
+        const keys = data.groups ? Object.keys(data.groups) : [];
+        groupCount = keys.length || DEFAULT_GROUP_COUNT;
+    }
+    groupCount = Math.min(Math.max(groupCount, MIN_GROUP_COUNT), MAX_GROUP_COUNT);
+
+    const groups = {};
+    for (let i = 1; i <= groupCount; i++) {
+        const key = i.toString();
+        groups[key] = migrateGroup(data.groups ? data.groups[key] : undefined, i);
+    }
+
+    return {
+        version: DATA_VERSION,
+        groupCount: groupCount,
+        groups: groups,
+        rules: Array.isArray(data.rules) ? data.rules : [],
+        history: Array.isArray(data.history) ? data.history : []
+    };
+}
+
+// 数据访问辅助函数
+function getGroup(data, group) {
+    return data && data.groups ? data.groups[group] : undefined;
+}
+
+function getGroupCount(data) {
+    if (data && data.groupCount) {
+        return data.groupCount;
+    }
+    return data && data.groups ? Object.keys(data.groups).length : 0;
+}
+
+function getGroupScore(data, group) {
+    const g = getGroup(data, group);
+    return g ? (Number(g.score) || 0) : 0;
+}
+
+function setGroupScore(data, group, score) {
+    let g = getGroup(data, group);
+    if (!g) {
+        g = createDefaultGroup(parseInt(group, 10) || 1);
+        data.groups[group] = g;
+    }
+    g.score = Number(score) || 0;
+}
+
+function getGroupName(data, group) {
+    const g = getGroup(data, group);
+    return (g && g.name) ? g.name : `小组 ${group}`;
+}
+
+function getGroupMembers(data, group) {
+    const g = getGroup(data, group);
+    return (g && Array.isArray(g.members)) ? g.members : [];
+}
+
+// 成员显示名：未录入名字时使用坐标
+function getMemberDisplayName(member) {
+    if (!member) return '';
+    const name = typeof member.name === 'string' ? member.name.trim() : '';
+    if (name) return name;
+    return `${member.col || 1}列${member.row || 1}行`;
+}
+
+// 读取成员贡献值
+function getMemberContribution(member) {
+    return member ? (Number(member.contribution) || 0) : 0;
+}
+
+// 设置成员贡献值
+function setMemberContribution(member, value) {
+    if (member) {
+        member.contribution = Number(value) || 0;
+    }
+}
+
+// 创建规则对象
+function createRule(name, value) {
+    return {
+        id: `rule_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: name,
+        value: value
+    };
+}
+
+// 读取规则列表
+function getRules(data) {
+    return (data && Array.isArray(data.rules)) ? data.rules : [];
+}
+
+// 初始化数据（含旧数据自动迁移）
+function initData() {
+    const existingData = localStorage.getItem(STORAGE_KEY);
+    let data = null;
+    if (existingData) {
+        try {
+            data = JSON.parse(existingData);
+        } catch (error) {
+            data = null;
+        }
+    }
+    const migrated = migrateData(data);
+    // 仅在首次使用或需要迁移时写回，避免重复迁移/重置
+    if (!data || data.version !== DATA_VERSION) {
+        saveData(migrated);
+    }
+    return migrated;
 }
 
 // 添加历史记录
-function addHistoryRecord(scoreData, type, group, before, after) {
+function addHistoryRecord(scoreData, type, group, before, after, extra) {
     const record = {
         type: type,
         group: group,
@@ -805,6 +1002,14 @@ function addHistoryRecord(scoreData, type, group, before, after) {
         after: after,
         timestamp: Date.now()
     };
+    // 规则来源与成员归属（规则计分 / 成员贡献计分）
+    if (extra && typeof extra === 'object') {
+        if (extra.ruleName) record.ruleName = extra.ruleName;
+        if (extra.memberId) record.memberId = extra.memberId;
+        if (extra.memberName) record.memberName = extra.memberName;
+        if (typeof extra.beforeContribution === 'number') record.beforeContribution = extra.beforeContribution;
+        if (typeof extra.afterContribution === 'number') record.afterContribution = extra.afterContribution;
+    }
     scoreData.history.push(record);
     // 限制最多100条记录
     if (scoreData.history.length > 100) {
@@ -825,7 +1030,9 @@ function formatActionType(type) {
         'reset': '重置',
         'save': '保存',
         'add-all': '全员加分',
-        'subtract-all': '全员减分'
+        'subtract-all': '全员减分',
+        'add-member': '成员加分',
+        'subtract-member': '成员减分'
     };
     return typeMap[type] || type;
 }
@@ -852,17 +1059,27 @@ function undoHistoryRecord(scoreData, recordIndex, saveData, loadDataToPage, add
     const record = scoreData.history[recordIndex];
     
     // 根据记录类型恢复分数
-    if (record.group === null) {
+    if (record.group === null || record.group === undefined) {
         // 全员操作，恢复所有小组
-        for (let i = 1; i <= 7; i++) {
-            const groupKey = i.toString();
-            if (record.before && record.before[groupKey] !== undefined) {
-                scoreData.groups[groupKey] = record.before[groupKey];
-            }
+        if (record.before && typeof record.before === 'object') {
+            Object.keys(record.before).forEach(function(groupKey) {
+                setGroupScore(scoreData, groupKey, record.before[groupKey]);
+            });
         }
     } else {
         // 单个小组操作
-        scoreData.groups[record.group] = record.before;
+        setGroupScore(scoreData, record.group, record.before);
+
+        // 因个人加减分：同时还原该成员贡献值
+        if (record.memberId) {
+            const member = getGroupMembers(scoreData, record.group).find(item => item.id === record.memberId);
+            if (member) {
+                const restoredContribution = (typeof record.beforeContribution === 'number')
+                    ? record.beforeContribution
+                    : getMemberContribution(member) - (record.after - record.before);
+                setMemberContribution(member, restoredContribution);
+            }
+        }
     }
     
     // 移除被撤销的记录
@@ -898,18 +1115,109 @@ function loadDataToPage(data) {
     const scoreGroups = document.querySelectorAll('.score-group');
     scoreGroups.forEach(group => {
         const groupNumber = group.dataset.group;
-        const groupScore = data.groups[groupNumber] || 0;
+        const groupScore = getGroupScore(data, groupNumber);
+        const nameElement = group.querySelector('h2');
         const scoreElement = group.querySelector('.score-value');
         const inputElement = group.querySelector('.score-input');
+        const membersButton = group.querySelector('.score-members');
+        if (nameElement) nameElement.textContent = getGroupName(data, groupNumber);
         if (scoreElement) scoreElement.textContent = groupScore;
         if (inputElement) inputElement.value = groupScore;
+        if (membersButton) membersButton.textContent = `成员 (${getGroupMembers(data, groupNumber).length})`;
     });
+}
+
+// 渲染小组卡片（按 groupCount 动态生成）
+function renderGroups(data) {
+    const container = document.querySelector('.score-container');
+    if (!container) return;
+    container.innerHTML = '';
+    const groupCount = getGroupCount(data);
+    const fragment = document.createDocumentFragment();
+    for (let i = 1; i <= groupCount; i++) {
+        fragment.appendChild(createGroupCard(data, i.toString()));
+    }
+    container.appendChild(fragment);
+}
+
+// 创建单个小组卡片
+function createGroupCard(data, group) {
+    const section = document.createElement('section');
+    section.className = 'score-group';
+    section.dataset.group = group;
+
+    const title = document.createElement('h2');
+    title.textContent = getGroupName(data, group);
+    section.appendChild(title);
+
+    const display = document.createElement('div');
+    display.className = 'score-display';
+
+    const scoreValue = document.createElement('span');
+    scoreValue.className = 'score-value';
+    scoreValue.textContent = getGroupScore(data, group);
+    display.appendChild(scoreValue);
+
+    const scoreInput = document.createElement('input');
+    scoreInput.type = 'number';
+    scoreInput.className = 'score-input';
+    scoreInput.value = getGroupScore(data, group);
+    display.appendChild(scoreInput);
+
+    const saveButton = document.createElement('button');
+    saveButton.className = 'score-save';
+    saveButton.textContent = '保存';
+    display.appendChild(saveButton);
+
+    section.appendChild(display);
+
+    const controls = document.createElement('div');
+    controls.className = 'score-controls';
+
+    const addButton = document.createElement('button');
+    addButton.className = 'score-add';
+    addButton.textContent = '增加';
+    controls.appendChild(addButton);
+
+    const subtractButton = document.createElement('button');
+    subtractButton.className = 'score-subtract';
+    subtractButton.textContent = '减少';
+    controls.appendChild(subtractButton);
+
+    const resetButton = document.createElement('button');
+    resetButton.className = 'score-reset';
+    resetButton.textContent = '重置';
+    controls.appendChild(resetButton);
+
+    section.appendChild(controls);
+
+    const membersButton = document.createElement('button');
+    membersButton.className = 'score-members';
+    membersButton.textContent = `成员 (${getGroupMembers(data, group).length})`;
+    section.appendChild(membersButton);
+
+    return section;
 }
 
 // 添加操作反馈
 function addFeedback(element) {
     element.classList.add('updated');
     setTimeout(() => element.classList.remove('updated'), 500);
+}
+
+// 更新单个小组卡片的分数显示
+function updateGroupCardScore(group, score, addFeedback) {
+    const scoreGroup = document.querySelector(`.score-group[data-group="${group}"]`);
+    if (!scoreGroup) return;
+    const scoreElement = scoreGroup.querySelector('.score-value');
+    const inputElement = scoreGroup.querySelector('.score-input');
+    if (scoreElement) {
+        scoreElement.textContent = score;
+        if (addFeedback) addFeedback(scoreElement);
+    }
+    if (inputElement) {
+        inputElement.value = score;
+    }
 }
 
 
@@ -1343,7 +1651,113 @@ function initLazyLoading() {
     imageLoader.init();
 }
 
-// 创建加减分弹出层
+// 构建（规则列表 + 自定义分值）计分面板
+// onApply(delta, meta)：delta 为分值增量，meta 为规则来源信息（自定义分值时为 null）
+function createScoreOptionsPanel(scoreData, defaultDirection, onApply) {
+    const panel = document.createElement('div');
+
+    const rulesTitle = document.createElement('h4');
+    rulesTitle.className = 'settings-subtitle';
+    rulesTitle.textContent = '规则计分';
+    panel.appendChild(rulesTitle);
+
+    const ruleList = document.createElement('div');
+    ruleList.className = 'rule-list';
+
+    const rules = getRules(scoreData);
+    if (rules.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'member-empty';
+        empty.textContent = '暂无规则，可在设置中添加';
+        ruleList.appendChild(empty);
+    } else {
+        rules.forEach(rule => {
+            const ruleValue = Number(rule.value) || 0;
+            const ruleButton = document.createElement('button');
+            ruleButton.className = 'popup-button';
+            ruleButton.style.cssText = 'width: 100%; margin: 4px 0; display: flex; justify-content: space-between; align-items: center;';
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = rule.name;
+            ruleButton.appendChild(nameSpan);
+
+            const valueSpan = document.createElement('span');
+            valueSpan.textContent = ruleValue > 0 ? `+${ruleValue}` : `${ruleValue}`;
+            valueSpan.style.cssText = `font-weight: 600; color: ${ruleValue >= 0 ? '#10b981' : '#ef4444'};`;
+            ruleButton.appendChild(valueSpan);
+
+            ruleButton.addEventListener('click', () => {
+                onApply(ruleValue, { ruleName: rule.name });
+            });
+            ruleList.appendChild(ruleButton);
+        });
+    }
+    panel.appendChild(ruleList);
+
+    const customSection = document.createElement('div');
+    customSection.className = 'settings-section';
+
+    const customTitle = document.createElement('h4');
+    customTitle.className = 'settings-subtitle';
+    customTitle.textContent = '自定义分值';
+    customSection.appendChild(customTitle);
+
+    const customRow = document.createElement('div');
+    customRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+
+    const directionSelect = document.createElement('select');
+    directionSelect.className = 'settings-input';
+    directionSelect.style.cssText = 'flex: 0 0 90px; margin-bottom: 0;';
+
+    const addOption = document.createElement('option');
+    addOption.value = 'add';
+    addOption.textContent = '加分';
+    directionSelect.appendChild(addOption);
+
+    const subtractOption = document.createElement('option');
+    subtractOption.value = 'subtract';
+    subtractOption.textContent = '减分';
+    directionSelect.appendChild(subtractOption);
+    directionSelect.value = defaultDirection === 'subtract' ? 'subtract' : 'add';
+    customRow.appendChild(directionSelect);
+
+    const valueInput = document.createElement('input');
+    valueInput.type = 'number';
+    valueInput.className = 'settings-input';
+    valueInput.min = '1';
+    valueInput.step = '1';
+    valueInput.placeholder = '分值';
+    valueInput.style.cssText = 'flex: 1 1 auto; min-width: 0; margin-bottom: 0;';
+    customRow.appendChild(valueInput);
+
+    const confirmButton = document.createElement('button');
+    confirmButton.className = 'popup-button';
+    confirmButton.textContent = '确定';
+    confirmButton.style.cssText = 'flex: 0 0 auto; margin: 0;';
+    customRow.appendChild(confirmButton);
+
+    const applyCustom = () => {
+        const magnitude = parseInt(valueInput.value, 10);
+        if (isNaN(magnitude) || magnitude < 1) {
+            alert('请输入大于 0 的有效分值！');
+            return;
+        }
+        const delta = directionSelect.value === 'subtract' ? -magnitude : magnitude;
+        onApply(delta, null);
+    };
+
+    valueInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') applyCustom();
+    });
+    confirmButton.addEventListener('click', applyCustom);
+
+    customSection.appendChild(customRow);
+    panel.appendChild(customSection);
+
+    return panel;
+}
+
+// 创建（规则驱动的）小组计分弹出层
 function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedback) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
@@ -1354,150 +1768,35 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     // 使用文档片段批量创建DOM元素，减少重排重绘
     const fragment = document.createDocumentFragment();
     
-    const title = document.createElement('h3');
-    title.textContent = type === 'add' ? '选择加分值' : '选择减分值';
-    fragment.appendChild(title);
-    
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'popup-buttons';
-    
-    const values = type === 'add' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4];
-    values.forEach(value => {
-        const button = document.createElement('button');
-        button.className = 'popup-button';
-        button.textContent = type === 'add' ? `+${value}` : `-${value}`;
-        button.addEventListener('click', function() {
-            const beforeScore = scoreData.groups[group] || 0;
-            if (type === 'add') {
-                scoreData.groups[group] = beforeScore + value;
-            } else {
-                scoreData.groups[group] = Math.max(0, beforeScore - value);
-            }
-            const afterScore = scoreData.groups[group];
-            addHistoryRecord(scoreData, type, group, beforeScore, afterScore);
-            saveData(scoreData);
-            
-            // 缓存DOM引用，减少DOM查询
-            const scoreGroup = document.querySelector(`.score-group[data-group="${group}"]`);
-            if (scoreGroup) {
-                const scoreElement = scoreGroup.querySelector('.score-value');
-                const inputElement = scoreGroup.querySelector('.score-input');
-                if (scoreElement) {
-                    scoreElement.textContent = scoreData.groups[group];
-                    addFeedback(scoreElement);
-                }
-                if (inputElement) inputElement.value = scoreData.groups[group];
-            }
-            
-            overlay.classList.add('closing');
-            popup.classList.add('closing');
-            setTimeout(() => {
-                document.body.removeChild(overlay);
-                // 清理事件监听器
-                buttonContainer.querySelectorAll('button').forEach(btn => {
-                    btn.removeEventListener('click', arguments.callee);
-                });
-                cancelButton.removeEventListener('click', cancelHandler);
-            }, 400);
-        });
-        buttonContainer.appendChild(button);
-    });
-    
-    fragment.appendChild(buttonContainer);
-    
-    // 添加自定义分值输入
-    const customSection = document.createElement('div');
-    customSection.style.cssText = 'margin: 15px 0;';
-    
-    const customLabel = document.createElement('label');
-    customLabel.textContent = type === 'add' ? '自定义加分值：' : '自定义减分值：';
-    customLabel.style.cssText = 'display: block; margin-bottom: 5px; font-size: 14px;';
-    
-    const customInput = document.createElement('input');
-    customInput.type = 'number';
-    customInput.min = '1';
-    customInput.max = '100';
-    customInput.step = '1';
-    customInput.style.cssText = 'width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;';
-    
-    const confirmButton = document.createElement('button');
-    confirmButton.className = 'popup-button';
-    confirmButton.textContent = '确定';
-    confirmButton.style.cssText = 'margin-top: 10px; width: 100%;';
-    
-    const handleCustomInput = (e) => {
-        if (e.key === 'Enter') {
-            handleConfirm();
-        }
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
     };
-    
-    const handleConfirm = () => {
-        const customValue = parseInt(customInput.value);
-        if (isNaN(customValue) || customValue < 1 || customValue > 100) {
-            alert('请输入1-100之间的有效数字！');
-            return;
-        }
 
-        const beforeScore = scoreData.groups[group] || 0;
-        if (type === 'add') {
-            scoreData.groups[group] = beforeScore + customValue;
-        } else {
-            scoreData.groups[group] = Math.max(0, beforeScore - customValue);
-        }
-        const afterScore = scoreData.groups[group];
-        addHistoryRecord(scoreData, type, group, beforeScore, afterScore);
+    const applyScore = (delta, meta) => {
+        if (!delta) return;
+        const beforeScore = getGroupScore(scoreData, group);
+        setGroupScore(scoreData, group, beforeScore + delta);
+        const afterScore = getGroupScore(scoreData, group);
+        addHistoryRecord(scoreData, delta > 0 ? 'add' : 'subtract', group, beforeScore, afterScore, meta);
         saveData(scoreData);
-        
-        // 缓存DOM引用，减少DOM查询
-        const scoreGroup = document.querySelector(`.score-group[data-group="${group}"]`);
-        if (scoreGroup) {
-            const scoreElement = scoreGroup.querySelector('.score-value');
-            const inputElement = scoreGroup.querySelector('.score-input');
-            if (scoreElement) {
-                scoreElement.textContent = scoreData.groups[group];
-                addFeedback(scoreElement);
-            }
-            if (inputElement) inputElement.value = scoreData.groups[group];
-        }
-        
-        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-            // 清理事件监听器
-            buttonContainer.querySelectorAll('button').forEach(btn => {
-                btn.removeEventListener('click', arguments.callee);
-            });
-            cancelButton.removeEventListener('click', cancelHandler);
-            customInput.removeEventListener('keypress', handleCustomInput);
-            confirmButton.removeEventListener('click', handleConfirm);
-        }, 400);
+        updateGroupCardScore(group, afterScore, addFeedback);
+        closePopup();
     };
-    
-    customInput.addEventListener('keypress', handleCustomInput);
-    confirmButton.addEventListener('click', handleConfirm);
-    
-    customSection.appendChild(customLabel);
-    customSection.appendChild(customInput);
-    customSection.appendChild(confirmButton);
-    
-    fragment.appendChild(customSection);
-    
-    const cancelHandler = () => {
-        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-            // 清理事件监听器
-            customInput.removeEventListener('keypress', handleCustomInput);
-            confirmButton.removeEventListener('click', handleConfirm);
-        }, 400);
-    };
-    
+
+    const title = document.createElement('h3');
+    title.textContent = `计分 - ${getGroupName(scoreData, group)}`;
+    fragment.appendChild(title);
+
+    fragment.appendChild(createScoreOptionsPanel(scoreData, type, applyScore));
+
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
     cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', cancelHandler);
+    cancelButton.addEventListener('click', closePopup);
     fragment.appendChild(cancelButton);
     
     // 一次性将所有元素添加到DOM中，减少重排重绘
@@ -1520,123 +1819,190 @@ function createPopup(type, group, scoreData, saveData, loadDataToPage, addFeedba
     document.body.appendChild(overlay);
 }
 
-// 创建加分值管理弹出层
-function createScoreValueManagementPopup(scoreData, saveData, loadDataToPage, addFeedback) {
+// 创建规则管理弹出层（新增 / 编辑 / 删除计分规则）
+function createRuleManagementPopup(scoreData, saveData) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
-    
+
     const popup = document.createElement('div');
     popup.className = 'popup';
-    
-    const fragment = document.createDocumentFragment();
-    
+
     const title = document.createElement('h3');
-    title.textContent = '加分值管理';
-    fragment.appendChild(title);
-    
-    let selectedGroup = null;
-    
-    const groupSection = document.createElement('div');
-    groupSection.style.cssText = 'margin: 15px 0;';
-    
-    const groupTitle = document.createElement('h4');
-    groupTitle.textContent = '选择小组';
-    groupSection.appendChild(groupTitle);
-    
-    const groupContainer = document.createElement('div');
-    groupContainer.className = 'popup-buttons';
-    
-    for (let i = 1; i <= 7; i++) {
-        const groupButton = document.createElement('button');
-        groupButton.className = 'popup-button';
-        groupButton.textContent = `小组 ${i}`;
-        groupButton.dataset.group = i.toString();
-        
-        groupButton.addEventListener('click', function() {
-            document.querySelectorAll('[data-group]').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            this.classList.add('selected');
-            selectedGroup = i.toString();
-        });
-        
-        groupContainer.appendChild(groupButton);
-    }
-    
-    groupSection.appendChild(groupContainer);
-    fragment.appendChild(groupSection);
-    
-    const actionButtonsSection = document.createElement('div');
-    actionButtonsSection.style.cssText = 'margin: 15px 0;';
-    
-    const actionButtonsContainer = document.createElement('div');
-    actionButtonsContainer.className = 'popup-buttons';
-    
-    const addButton = document.createElement('button');
-    addButton.className = 'popup-button';
-    addButton.textContent = '添加加分值';
-    addButton.addEventListener('click', function() {
-        if (!selectedGroup) {
-            alert('请先选择一个小组！');
-            return;
-        }
-        createPopup('add', selectedGroup, scoreData, saveData, loadDataToPage, addFeedback);
+    title.textContent = '规则管理';
+    popup.appendChild(title);
+
+    const closePopup = () => {
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-    });
-    
-    const subtractButton = document.createElement('button');
-    subtractButton.className = 'popup-button';
-    subtractButton.textContent = '删减加分值';
-    subtractButton.addEventListener('click', function() {
-        if (!selectedGroup) {
-            alert('请先选择一个小组！');
-            return;
-        }
-        createPopup('subtract', selectedGroup, scoreData, saveData, loadDataToPage, addFeedback);
-        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
-        }, 400);
-    });
-    
-    actionButtonsContainer.appendChild(addButton);
-    actionButtonsContainer.appendChild(subtractButton);
-    actionButtonsSection.appendChild(actionButtonsContainer);
-    fragment.appendChild(actionButtonsSection);
-    
-    const cancelHandler = () => {
-        overlay.classList.add('closing');
-        popup.classList.add('closing');
-        setTimeout(() => {
-            document.body.removeChild(overlay);
+            if (overlay.parentNode) document.body.removeChild(overlay);
         }, 400);
     };
-    
-    const cancelButton = document.createElement('button');
-    cancelButton.className = 'popup-cancel';
-    cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', cancelHandler);
-    fragment.appendChild(cancelButton);
-    
-    popup.appendChild(fragment);
+
+    // 规则列表
+    const listSection = document.createElement('div');
+    listSection.className = 'settings-section';
+
+    const listTitle = document.createElement('h4');
+    listTitle.className = 'settings-subtitle';
+    listTitle.textContent = '现有规则';
+    listSection.appendChild(listTitle);
+
+    const ruleListContainer = document.createElement('div');
+    ruleListContainer.className = 'rule-list';
+    listSection.appendChild(ruleListContainer);
+
+    const renderRuleList = () => {
+        ruleListContainer.innerHTML = '';
+        const rules = getRules(scoreData);
+        if (rules.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'member-empty';
+            empty.textContent = '暂无规则，请在下方添加';
+            ruleListContainer.appendChild(empty);
+            return;
+        }
+        rules.forEach(rule => {
+            const row = document.createElement('div');
+            row.className = 'member-item';
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'member-name-input';
+            nameInput.value = rule.name;
+            row.appendChild(nameInput);
+
+            const valueInput = document.createElement('input');
+            valueInput.type = 'number';
+            valueInput.className = 'member-name-input';
+            valueInput.style.cssText = 'flex: 0 0 80px; min-width: 0;';
+            valueInput.value = rule.value;
+            row.appendChild(valueInput);
+
+            const saveButton = document.createElement('button');
+            saveButton.className = 'popup-button';
+            saveButton.textContent = '保存';
+            saveButton.style.cssText = 'flex: 0 0 auto; margin: 0; padding: 6px 10px; font-size: 13px;';
+            saveButton.addEventListener('click', () => {
+                const name = nameInput.value.trim();
+                const value = parseInt(valueInput.value, 10);
+                if (!name) {
+                    alert('请输入规则名称！');
+                    return;
+                }
+                if (isNaN(value) || value === 0) {
+                    alert('请输入有效分值（不能为 0，可为负数）！');
+                    return;
+                }
+                rule.name = name;
+                rule.value = value;
+                saveData(scoreData);
+                renderRuleList();
+                showToast('✅ 规则已更新', 'success');
+            });
+            row.appendChild(saveButton);
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'popup-button';
+            deleteButton.textContent = '删除';
+            deleteButton.style.cssText = 'flex: 0 0 auto; margin: 0; padding: 6px 10px; font-size: 13px; background: #ef4444; color: white;';
+            deleteButton.addEventListener('click', () => {
+                createConfirmPopup('确认删除', `确定要删除规则"${rule.name}"吗？`, () => {
+                    const rules = getRules(scoreData);
+                    const index = rules.findIndex(r => r.id === rule.id);
+                    if (index > -1) {
+                        rules.splice(index, 1);
+                    }
+                    saveData(scoreData);
+                    renderRuleList();
+                    showToast('✅ 规则已删除', 'success');
+                });
+            });
+            row.appendChild(deleteButton);
+
+            ruleListContainer.appendChild(row);
+        });
+    };
+
+    renderRuleList();
+    popup.appendChild(listSection);
+
+    // 新增规则
+    const addSection = document.createElement('div');
+    addSection.className = 'settings-section';
+
+    const addTitle = document.createElement('h4');
+    addTitle.className = 'settings-subtitle';
+    addTitle.textContent = '新增规则';
+    addSection.appendChild(addTitle);
+
+    const addRow = document.createElement('div');
+    addRow.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+
+    const newNameInput = document.createElement('input');
+    newNameInput.type = 'text';
+    newNameInput.className = 'settings-input';
+    newNameInput.placeholder = '规则名称（如：认真听讲）';
+    newNameInput.style.cssText = 'flex: 1 1 auto; min-width: 0; margin-bottom: 0;';
+    addRow.appendChild(newNameInput);
+
+    const newValueInput = document.createElement('input');
+    newValueInput.type = 'number';
+    newValueInput.className = 'settings-input';
+    newValueInput.placeholder = '分值';
+    newValueInput.style.cssText = 'flex: 0 0 90px; margin-bottom: 0;';
+    addRow.appendChild(newValueInput);
+
+    const addButton = document.createElement('button');
+    addButton.className = 'popup-button';
+    addButton.textContent = '添加';
+    addButton.style.cssText = 'flex: 0 0 auto; margin: 0;';
+    addButton.addEventListener('click', () => {
+        const name = newNameInput.value.trim();
+        const value = parseInt(newValueInput.value, 10);
+        if (!name) {
+            alert('请输入规则名称！');
+            return;
+        }
+        if (isNaN(value) || value === 0) {
+            alert('请输入有效分值（不能为 0，可为负数）！');
+            return;
+        }
+        const rules = getRules(scoreData);
+        rules.push(createRule(name, value));
+        saveData(scoreData);
+        newNameInput.value = '';
+        newValueInput.value = '';
+        renderRuleList();
+        showToast('✅ 规则已添加', 'success');
+    });
+    addRow.appendChild(addButton);
+
+    newValueInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addButton.click();
+    });
+
+    addSection.appendChild(addRow);
+    popup.appendChild(addSection);
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-cancel';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', closePopup);
+    popup.appendChild(closeButton);
+
     overlay.appendChild(popup);
-    
+
     const handleScroll = (e) => {
-        const hasScroll = popup.scrollHeight > popup.clientHeight;
-        if (!hasScroll) {
+        if (popup.scrollHeight <= popup.clientHeight) {
             e.preventDefault();
         }
         e.stopPropagation();
     };
-    
+
     overlay.addEventListener('wheel', handleScroll);
     popup.addEventListener('wheel', handleScroll);
-    
+
     document.body.appendChild(overlay);
 }
 
@@ -1799,6 +2165,7 @@ function init() {
     
     let scoreData = initData();
     
+    renderGroups(scoreData);
     loadDataToPage(scoreData);
     
     // 使用事件委托优化事件监听器管理
@@ -1823,8 +2190,8 @@ function init() {
                 createPopup('subtract', group, scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('score-reset')) {
                 createConfirmPopup('确认重置', '确定要重置该小组的积分吗？', () => {
-                    const beforeScore = scoreData.groups[group] || 0;
-                    scoreData.groups[group] = 0;
+                    const beforeScore = getGroupScore(scoreData, group);
+                    setGroupScore(scoreData, group, 0);
                     addHistoryRecord(scoreData, 'reset', group, beforeScore, 0);
                     saveData(scoreData);
                     
@@ -1836,30 +2203,26 @@ function init() {
                     }
                     if (inputElement) inputElement.value = '0';
                 });
+            } else if (target.classList.contains('score-members')) {
+                createMemberManagementPopup(scoreData, group, saveData, loadDataToPage);
             } else if (target.classList.contains('score-save')) {
                 const inputElement = scoreGroup.querySelector('.score-input');
                 const scoreValue = parseInt(inputElement.value);
                 
                 if (isNaN(scoreValue)) {
                     alert('请输入有效的整数！');
-                    inputElement.value = scoreData.groups[group] || 0;
-                    return;
-                }
-                
-                if (scoreValue < 0) {
-                    alert('积分值不能小于0！');
-                    inputElement.value = scoreData.groups[group] || 0;
+                    inputElement.value = getGroupScore(scoreData, group);
                     return;
                 }
                 
                 if (scoreValue >= 1000) {
                     alert('积分值不能大于等于1000！');
-                    inputElement.value = scoreData.groups[group] || 0;
+                    inputElement.value = getGroupScore(scoreData, group);
                     return;
                 }
                 
-                const beforeScore = scoreData.groups[group] || 0;
-                scoreData.groups[group] = scoreValue;
+                const beforeScore = getGroupScore(scoreData, group);
+                setGroupScore(scoreData, group, scoreValue);
                 addHistoryRecord(scoreData, 'save', group, beforeScore, scoreValue);
                 saveData(scoreData);
                 
@@ -1879,8 +2242,9 @@ function init() {
             
             if (target.classList.contains('reset-all')) {
                 createConfirmPopup('确认重置', '确定要重置所有小组的积分吗？', () => {
-                    for (let i = 1; i <= 7; i++) {
-                        scoreData.groups[i.toString()] = 0;
+                    const groupCount = getGroupCount(scoreData);
+                    for (let i = 1; i <= groupCount; i++) {
+                        setGroupScore(scoreData, i.toString(), 0);
                     }
                     clearHistory(scoreData);
                     saveData(scoreData);
@@ -1913,93 +2277,64 @@ function init() {
     
 }
 
-// 创建全局操作弹出层
+// 创建（规则驱动的）全员计分弹出层
 function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedback) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
     const popup = document.createElement('div');
     popup.className = 'popup';
-    
+
     const title = document.createElement('h3');
-    title.textContent = type === 'add' ? '选择加分值' : '选择减分值';
+    title.textContent = '全员计分';
     popup.appendChild(title);
-    
-    const buttonContainer = document.createElement('div');
-    buttonContainer.className = 'popup-buttons';
-    
-    const values = type === 'add' ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4];
-    values.forEach(value => {
-        const button = document.createElement('button');
-        button.className = 'popup-button';
-        button.textContent = type === 'add' ? `+${value}` : `-${value}`;
-        button.addEventListener('click', function() {
-            // 保存所有小组的分数
-            const beforeScores = {};
-            for (let i = 1; i <= 7; i++) {
-                beforeScores[i.toString()] = scoreData.groups[i.toString()] || 0;
-            }
-            
-            for (let i = 1; i <= 7; i++) {
-                if (type === 'add') {
-                    scoreData.groups[i.toString()] = beforeScores[i.toString()] + value;
-                } else {
-                    scoreData.groups[i.toString()] = Math.max(0, beforeScores[i.toString()] - value);
-                }
-            }
-            
-            // 保存所有小组的新分数
-            const afterScores = {};
-            for (let i = 1; i <= 7; i++) {
-                afterScores[i.toString()] = scoreData.groups[i.toString()] || 0;
-            }
-            
-            addHistoryRecord(scoreData, type + '-all', null, beforeScores, afterScores);
-            saveData(scoreData);
-            
-            for (let i = 1; i <= 7; i++) {
-                const scoreElement = document.querySelector(`.score-group[data-group="${i}"] .score-value`);
-                const inputElement = document.querySelector(`.score-group[data-group="${i}"] .score-input`);
-                if (scoreElement) {
-                    scoreElement.textContent = scoreData.groups[i.toString()];
-                    addFeedback(scoreElement);
-                }
-                if (inputElement) inputElement.value = scoreData.groups[i.toString()];
-            }
-            overlay.classList.add('closing');
-            popup.classList.add('closing');
-            setTimeout(() => {
-                document.body.removeChild(overlay);
-                // 清理事件监听器
-                buttonContainer.querySelectorAll('button').forEach(btn => {
-                    btn.removeEventListener('click', arguments.callee);
-                });
-                cancelButton.removeEventListener('click', cancelHandler);
-            }, 400);
-        });
-        buttonContainer.appendChild(button);
-    });
-    
-    const cancelHandler = () => {
+
+    const closePopup = () => {
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
-            document.body.removeChild(overlay);
-            // 清理事件监听器
-            buttonContainer.querySelectorAll('button').forEach(btn => {
-                btn.removeEventListener('click', arguments.callee);
-            });
+            if (overlay.parentNode) document.body.removeChild(overlay);
         }, 400);
     };
-    
+
+    const applyScore = (delta, meta) => {
+        if (!delta) return;
+        const groupCount = getGroupCount(scoreData);
+
+        const beforeScores = {};
+        for (let i = 1; i <= groupCount; i++) {
+            beforeScores[i.toString()] = getGroupScore(scoreData, i.toString());
+        }
+
+        for (let i = 1; i <= groupCount; i++) {
+            const key = i.toString();
+            setGroupScore(scoreData, key, beforeScores[key] + delta);
+        }
+
+        const afterScores = {};
+        for (let i = 1; i <= groupCount; i++) {
+            afterScores[i.toString()] = getGroupScore(scoreData, i.toString());
+        }
+
+        addHistoryRecord(scoreData, delta > 0 ? 'add-all' : 'subtract-all', null, beforeScores, afterScores, meta);
+        saveData(scoreData);
+
+        for (let i = 1; i <= groupCount; i++) {
+            const key = i.toString();
+            updateGroupCardScore(key, getGroupScore(scoreData, key), addFeedback);
+        }
+        closePopup();
+    };
+
+    popup.appendChild(createScoreOptionsPanel(scoreData, type, applyScore));
+
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-cancel';
     cancelButton.textContent = '取消';
-    cancelButton.addEventListener('click', cancelHandler);
-    
-    popup.appendChild(buttonContainer);
+    cancelButton.addEventListener('click', closePopup);
     popup.appendChild(cancelButton);
+
     overlay.appendChild(popup);
-    
+
     // 添加滚动事件处理，阻止背景页面滚动
     const handleScroll = (e) => {
         // 检查弹窗内部是否有滚动条
@@ -2009,10 +2344,594 @@ function createGlobalPopup(type, scoreData, saveData, loadDataToPage, addFeedbac
         }
         e.stopPropagation();
     };
-    
+
     overlay.addEventListener('wheel', handleScroll);
     popup.addEventListener('wheel', handleScroll);
-    
+
+    document.body.appendChild(overlay);
+}
+
+// 应用新的小组数量（保留 1~newCount，删除多余小组数据）
+function applyGroupCount(data, newCount) {
+    const groups = data.groups || {};
+    const nextGroups = {};
+    for (let i = 1; i <= newCount; i++) {
+        const key = i.toString();
+        nextGroups[key] = groups[key] || createDefaultGroup(i);
+    }
+    data.groups = nextGroups;
+    data.groupCount = newCount;
+}
+
+// 设置小组成员数量（增加时补全末尾成员，减少时删除末尾成员）
+function setMemberCount(data, group, count) {
+    const g = getGroup(data, group);
+    if (!g) return;
+    if (!Array.isArray(g.members)) {
+        g.members = [];
+    }
+    const members = g.members;
+    if (count > members.length) {
+        for (let i = members.length; i < count; i++) {
+            members.push(createMember(group, i + 1));
+        }
+    } else if (count < members.length) {
+        members.splice(count);
+    }
+}
+
+// 创建小组设置弹出层（小组数量 + 小组名称）
+function createGroupSettingsPopup(scoreData, saveData, loadDataToPage) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = '小组设置';
+    popup.appendChild(title);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    // 小组数量
+    const countSection = document.createElement('div');
+    countSection.className = 'settings-section';
+
+    const countLabel = document.createElement('label');
+    countLabel.className = 'settings-label';
+    countLabel.textContent = `小组数量（${MIN_GROUP_COUNT}-${MAX_GROUP_COUNT}）`;
+    countSection.appendChild(countLabel);
+
+    const countInput = document.createElement('input');
+    countInput.type = 'number';
+    countInput.className = 'settings-input';
+    countInput.min = MIN_GROUP_COUNT.toString();
+    countInput.max = MAX_GROUP_COUNT.toString();
+    countInput.value = getGroupCount(scoreData);
+    countSection.appendChild(countInput);
+
+    const applyCount = () => {
+        const newCount = parseInt(countInput.value, 10);
+        if (isNaN(newCount) || newCount < MIN_GROUP_COUNT || newCount > MAX_GROUP_COUNT) {
+            alert(`请输入 ${MIN_GROUP_COUNT}-${MAX_GROUP_COUNT} 之间的有效数字！`);
+            countInput.value = getGroupCount(scoreData);
+            return;
+        }
+        const currentCount = getGroupCount(scoreData);
+        if (newCount === currentCount) {
+            return;
+        }
+
+        const apply = () => {
+            applyGroupCount(scoreData, newCount);
+            saveData(scoreData);
+            renderGroups(scoreData);
+            loadDataToPage(scoreData);
+            closePopup();
+        };
+
+        if (newCount < currentCount) {
+            createConfirmPopup('确认减少小组', `将删除小组 ${newCount + 1}~${currentCount} 及其数据，确定继续吗？`, apply);
+            return;
+        }
+        apply();
+    };
+
+    const countButton = document.createElement('button');
+    countButton.className = 'popup-button';
+    countButton.textContent = '应用小组数量';
+    countButton.addEventListener('click', applyCount);
+    countSection.appendChild(countButton);
+    popup.appendChild(countSection);
+
+    // 小组名称
+    const nameSection = document.createElement('div');
+    nameSection.className = 'settings-section';
+
+    const nameLabel = document.createElement('label');
+    nameLabel.className = 'settings-label';
+    nameLabel.textContent = '小组名称';
+    nameSection.appendChild(nameLabel);
+
+    const nameItems = [];
+    const groupCount = getGroupCount(scoreData);
+    for (let i = 1; i <= groupCount; i++) {
+        const row = document.createElement('div');
+        row.className = 'group-name-row';
+
+        const rowLabel = document.createElement('span');
+        rowLabel.className = 'group-name-label';
+        rowLabel.textContent = `小组 ${i}`;
+        row.appendChild(rowLabel);
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.className = 'group-name-input';
+        nameInput.value = getGroupName(scoreData, i.toString());
+        row.appendChild(nameInput);
+
+        nameItems.push({ group: i.toString(), input: nameInput });
+        nameSection.appendChild(row);
+    }
+
+    const saveNamesButton = document.createElement('button');
+    saveNamesButton.className = 'popup-button';
+    saveNamesButton.textContent = '保存小组名称';
+    saveNamesButton.addEventListener('click', () => {
+        nameItems.forEach(item => {
+            const group = getGroup(scoreData, item.group);
+            if (group) {
+                const value = item.input.value.trim();
+                group.name = value || `小组 ${item.group}`;
+            }
+        });
+        saveData(scoreData);
+        loadDataToPage(scoreData);
+        showToast('✅ 小组名称已保存', 'success');
+    });
+    nameSection.appendChild(saveNamesButton);
+    popup.appendChild(nameSection);
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-cancel';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', closePopup);
+    popup.appendChild(closeButton);
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
+    document.body.appendChild(overlay);
+}
+
+// 创建成员管理弹出层（人数 + 名字 + 坐标）
+function createMemberManagementPopup(scoreData, group, saveData, loadDataToPage) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = `成员管理 - ${getGroupName(scoreData, group)}`;
+    popup.appendChild(title);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    // 人数设置
+    const countSection = document.createElement('div');
+    countSection.className = 'settings-section';
+
+    const countLabel = document.createElement('label');
+    countLabel.className = 'settings-label';
+    countLabel.textContent = '人数';
+    countSection.appendChild(countLabel);
+
+    const countInput = document.createElement('input');
+    countInput.type = 'number';
+    countInput.className = 'settings-input';
+    countInput.min = '0';
+    countInput.max = '100';
+    countInput.value = getGroupMembers(scoreData, group).length;
+    countSection.appendChild(countInput);
+
+    // 成员名单
+    const listSection = document.createElement('div');
+    listSection.className = 'settings-section';
+
+    const listTitle = document.createElement('h4');
+    listTitle.className = 'settings-subtitle';
+    listTitle.textContent = '成员名单（留空则显示坐标）';
+    listSection.appendChild(listTitle);
+
+    const memberListContainer = document.createElement('div');
+    memberListContainer.className = 'member-list';
+
+    const renderMemberList = () => {
+        memberListContainer.innerHTML = '';
+        const members = getGroupMembers(scoreData, group);
+        countInput.value = members.length;
+        if (members.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'member-empty';
+            empty.textContent = '暂无成员，请先设置人数';
+            memberListContainer.appendChild(empty);
+            return;
+        }
+        members.forEach((member) => {
+            const item = document.createElement('div');
+            item.className = 'member-item';
+
+            const coord = document.createElement('span');
+            coord.className = 'member-coord';
+            coord.textContent = `${member.col || 1}列${member.row || 1}行`;
+            item.appendChild(coord);
+
+            const nameInput = document.createElement('input');
+            nameInput.type = 'text';
+            nameInput.className = 'member-name-input';
+            nameInput.value = typeof member.name === 'string' ? member.name : '';
+            nameInput.placeholder = getMemberDisplayName(member);
+            nameInput.dataset.memberId = member.id;
+            item.appendChild(nameInput);
+
+            const scoreButton = document.createElement('button');
+            scoreButton.className = 'popup-button';
+            scoreButton.textContent = '计分';
+            scoreButton.style.cssText = 'flex: 0 0 auto; margin: 0; padding: 6px 10px; font-size: 13px;';
+            scoreButton.addEventListener('click', () => {
+                memberListContainer.querySelectorAll('.member-name-input').forEach(input => {
+                    const target = members.find(m => m.id === input.dataset.memberId);
+                    if (target) {
+                        target.name = input.value.trim();
+                    }
+                });
+                saveData(scoreData);
+                createMemberScorePopup(scoreData, group, member, saveData, loadDataToPage, addFeedback);
+            });
+            item.appendChild(scoreButton);
+
+            memberListContainer.appendChild(item);
+        });
+    };
+
+    const applyCount = () => {
+        const newCount = parseInt(countInput.value, 10);
+        const currentCount = getGroupMembers(scoreData, group).length;
+        if (isNaN(newCount) || newCount < 0 || newCount > 100) {
+            alert('请输入 0-100 之间的有效数字！');
+            countInput.value = currentCount;
+            return;
+        }
+        if (newCount === currentCount) {
+            return;
+        }
+
+        const apply = () => {
+            setMemberCount(scoreData, group, newCount);
+            saveData(scoreData);
+            renderMemberList();
+            loadDataToPage(scoreData);
+        };
+
+        if (newCount < currentCount) {
+            createConfirmPopup('确认减少人数', `将删除末尾 ${currentCount - newCount} 位成员及其贡献，确定继续吗？`, apply);
+            return;
+        }
+        apply();
+    };
+
+    const countButton = document.createElement('button');
+    countButton.className = 'popup-button';
+    countButton.textContent = '应用人数';
+    countButton.addEventListener('click', applyCount);
+    countSection.appendChild(countButton);
+    popup.appendChild(countSection);
+
+    renderMemberList();
+    listSection.appendChild(memberListContainer);
+
+    const saveNamesButton = document.createElement('button');
+    saveNamesButton.className = 'popup-button';
+    saveNamesButton.textContent = '保存成员名字';
+    saveNamesButton.addEventListener('click', () => {
+        const members = getGroupMembers(scoreData, group);
+        memberListContainer.querySelectorAll('.member-name-input').forEach(input => {
+            const member = members.find(m => m.id === input.dataset.memberId);
+            if (member) {
+                member.name = input.value.trim();
+            }
+        });
+        saveData(scoreData);
+        renderMemberList();
+        showToast('✅ 成员名字已保存', 'success');
+    });
+    listSection.appendChild(saveNamesButton);
+    popup.appendChild(listSection);
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-cancel';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', closePopup);
+    popup.appendChild(closeButton);
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
+    document.body.appendChild(overlay);
+}
+
+// 创建成员贡献计分弹出层（个人计分同时计入小组分数与个人贡献）
+function createMemberScorePopup(scoreData, group, member, saveData, loadDataToPage, addFeedback) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = `成员计分 - ${getMemberDisplayName(member)}`;
+    popup.appendChild(title);
+
+    const groupHint = document.createElement('div');
+    groupHint.className = 'member-coord';
+    groupHint.textContent = `所属小组：${getGroupName(scoreData, group)}`;
+    popup.appendChild(groupHint);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    const applyScore = (delta, meta) => {
+        if (!delta) return;
+
+        const beforeScore = getGroupScore(scoreData, group);
+        setGroupScore(scoreData, group, beforeScore + delta);
+        const afterScore = getGroupScore(scoreData, group);
+
+        // 因个人加减分：等量计入该成员贡献
+        const beforeContribution = getMemberContribution(member);
+        setMemberContribution(member, beforeContribution + delta);
+        const afterContribution = getMemberContribution(member);
+
+        const extra = Object.assign({}, meta || {}, {
+            memberId: member.id,
+            memberName: getMemberDisplayName(member),
+            beforeContribution: beforeContribution,
+            afterContribution: afterContribution
+        });
+        addHistoryRecord(scoreData, delta > 0 ? 'add-member' : 'subtract-member', group, beforeScore, afterScore, extra);
+        saveData(scoreData);
+        updateGroupCardScore(group, afterScore, addFeedback);
+        closePopup();
+    };
+
+    popup.appendChild(createScoreOptionsPanel(scoreData, 'add', applyScore));
+
+    const cancelButton = document.createElement('button');
+    cancelButton.className = 'popup-cancel';
+    cancelButton.textContent = '取消';
+    cancelButton.addEventListener('click', closePopup);
+    popup.appendChild(cancelButton);
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
+    document.body.appendChild(overlay);
+}
+
+// 收集成员贡献排名（groupFilter 为空时表示跨组榜）
+function collectContributionRanking(scoreData, groupFilter) {
+    const ranking = [];
+    const groupCount = getGroupCount(scoreData);
+    const groups = groupFilter
+        ? [groupFilter.toString()]
+        : Array.from({ length: groupCount }, (_, index) => (index + 1).toString());
+
+    groups.forEach(group => {
+        getGroupMembers(scoreData, group).forEach(member => {
+            ranking.push({
+                group: group,
+                groupName: getGroupName(scoreData, group),
+                name: getMemberDisplayName(member),
+                contribution: getMemberContribution(member)
+            });
+        });
+    });
+
+    ranking.sort((a, b) => b.contribution - a.contribution);
+    return ranking;
+}
+
+// 创建贡献榜弹出层（组内榜 + 跨组榜）
+function createContributionRankPopup(scoreData) {
+    const overlay = document.createElement('div');
+    overlay.className = 'popup-overlay';
+
+    const popup = document.createElement('div');
+    popup.className = 'popup';
+
+    const title = document.createElement('h3');
+    title.textContent = '贡献榜';
+    popup.appendChild(title);
+
+    const closePopup = () => {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            if (overlay.parentNode) document.body.removeChild(overlay);
+        }, 400);
+    };
+
+    let currentMode = 'group';
+    let currentGroup = '1';
+
+    // 视图切换（组内榜 / 跨组榜）
+    const tabRow = document.createElement('div');
+    tabRow.style.cssText = 'display: flex; gap: 8px; margin-bottom: 12px;';
+
+    const groupTabButton = document.createElement('button');
+    groupTabButton.textContent = '组内榜';
+
+    const allTabButton = document.createElement('button');
+    allTabButton.textContent = '跨组榜';
+
+    const activeTabStyle = 'flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff;';
+    const inactiveTabStyle = 'flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f3f4f6; color: #374151;';
+
+    const updateTabStyles = () => {
+        groupTabButton.style.cssText = currentMode === 'group' ? activeTabStyle : inactiveTabStyle;
+        allTabButton.style.cssText = currentMode === 'all' ? activeTabStyle : inactiveTabStyle;
+    };
+
+    // 小组选择（仅组内榜显示）
+    const groupSelect = document.createElement('select');
+    groupSelect.className = 'settings-input';
+    groupSelect.style.cssText = 'margin-bottom: 12px;';
+
+    const groupCount = getGroupCount(scoreData);
+    for (let i = 1; i <= groupCount; i++) {
+        const option = document.createElement('option');
+        option.value = i.toString();
+        option.textContent = getGroupName(scoreData, i.toString());
+        groupSelect.appendChild(option);
+    }
+    groupSelect.value = currentGroup;
+
+    const listContainer = document.createElement('div');
+    listContainer.className = 'member-list';
+    listContainer.style.cssText = 'max-height: 320px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px;';
+
+    const render = () => {
+        listContainer.innerHTML = '';
+        const filter = currentMode === 'group' ? currentGroup : null;
+        const ranking = collectContributionRanking(scoreData, filter);
+        const hasContribution = ranking.some(item => item.contribution !== 0);
+
+        if (ranking.length === 0 || !hasContribution) {
+            const empty = document.createElement('div');
+            empty.className = 'member-empty';
+            empty.textContent = '暂无贡献数据';
+            listContainer.appendChild(empty);
+            return;
+        }
+
+        ranking.forEach((item, index) => {
+            const row = document.createElement('div');
+            row.className = 'member-item';
+
+            const rank = document.createElement('span');
+            rank.style.cssText = 'flex: 0 0 36px; font-size: 13px; font-weight: 600; color: #6b7280;';
+            rank.textContent = `#${index + 1}`;
+            row.appendChild(rank);
+
+            const name = document.createElement('span');
+            name.style.cssText = 'flex: 1; min-width: 0; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+            name.textContent = item.name;
+            row.appendChild(name);
+
+            if (currentMode === 'all') {
+                const tag = document.createElement('span');
+                tag.style.cssText = 'flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: #eef2ff; color: #4f46e5; font-size: 12px;';
+                tag.textContent = item.groupName;
+                row.appendChild(tag);
+            }
+
+            const contribution = document.createElement('span');
+            contribution.style.cssText = `flex: 0 0 56px; text-align: right; font-size: 14px; font-weight: 600; color: ${item.contribution >= 0 ? '#10b981' : '#ef4444'};`;
+            contribution.textContent = item.contribution > 0 ? `+${item.contribution}` : `${item.contribution}`;
+            row.appendChild(contribution);
+
+            listContainer.appendChild(row);
+        });
+    };
+
+    const refresh = () => {
+        updateTabStyles();
+        groupSelect.style.display = currentMode === 'group' ? '' : 'none';
+        render();
+    };
+
+    groupTabButton.addEventListener('click', () => {
+        currentMode = 'group';
+        refresh();
+    });
+    allTabButton.addEventListener('click', () => {
+        currentMode = 'all';
+        refresh();
+    });
+    groupSelect.addEventListener('change', () => {
+        currentGroup = groupSelect.value;
+        render();
+    });
+
+    tabRow.appendChild(groupTabButton);
+    tabRow.appendChild(allTabButton);
+    popup.appendChild(tabRow);
+    popup.appendChild(groupSelect);
+    popup.appendChild(listContainer);
+
+    const closeButton = document.createElement('button');
+    closeButton.className = 'popup-cancel';
+    closeButton.textContent = '关闭';
+    closeButton.addEventListener('click', closePopup);
+    popup.appendChild(closeButton);
+
+    refresh();
+
+    overlay.appendChild(popup);
+
+    const handleScroll = (e) => {
+        if (popup.scrollHeight <= popup.clientHeight) {
+            e.preventDefault();
+        }
+        e.stopPropagation();
+    };
+
+    overlay.addEventListener('wheel', handleScroll);
+    popup.addEventListener('wheel', handleScroll);
+
     document.body.appendChild(overlay);
 }
 
@@ -2047,19 +2966,33 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     });
     buttonContainer.appendChild(wallpaperButton);
     
-    // 加分值管理
-    const scoreValueManagementButton = document.createElement('button');
-    scoreValueManagementButton.className = 'popup-button';
-    scoreValueManagementButton.textContent = '加分值管理';
-    scoreValueManagementButton.addEventListener('click', function() {
+    // 规则管理
+    const ruleManagementButton = document.createElement('button');
+    ruleManagementButton.className = 'popup-button';
+    ruleManagementButton.textContent = '规则管理';
+    ruleManagementButton.addEventListener('click', function() {
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
             document.body.removeChild(overlay);
-            createScoreValueManagementPopup(scoreData, saveData, loadDataToPage, addFeedback);
+            createRuleManagementPopup(scoreData, saveData);
         }, 400);
     });
-    buttonContainer.appendChild(scoreValueManagementButton);
+    buttonContainer.appendChild(ruleManagementButton);
+    
+    // 小组设置
+    const groupSettingsButton = document.createElement('button');
+    groupSettingsButton.className = 'popup-button';
+    groupSettingsButton.textContent = '小组设置';
+    groupSettingsButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            createGroupSettingsPopup(scoreData, saveData, loadDataToPage);
+        }, 400);
+    });
+    buttonContainer.appendChild(groupSettingsButton);
     
     // 查看历史记录
     const historyButton = document.createElement('button');
@@ -2074,6 +3007,20 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         }, 400);
     });
     buttonContainer.appendChild(historyButton);
+    
+    // 贡献榜
+    const contributionRankButton = document.createElement('button');
+    contributionRankButton.className = 'popup-button';
+    contributionRankButton.textContent = '贡献榜';
+    contributionRankButton.addEventListener('click', function() {
+        overlay.classList.add('closing');
+        popup.classList.add('closing');
+        setTimeout(() => {
+            document.body.removeChild(overlay);
+            createContributionRankPopup(scoreData);
+        }, 400);
+    });
+    buttonContainer.appendChild(contributionRankButton);
     
     // 评比跳转网址设置
     const evaluationUrlSection = document.createElement('div');
@@ -2164,7 +3111,10 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         // 包含壁纸设置信息
         const wallpaperSettings = initWallpaperSettings();
         const exportData = {
+            version: scoreData.version,
+            groupCount: scoreData.groupCount,
             groups: scoreData.groups,
+            rules: scoreData.rules,
             wallpaper: wallpaperSettings,
             history: scoreData.history
         };
@@ -2202,17 +3152,15 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
                 try {
                     const importedData = JSON.parse(e.target.result);
                     if (importedData && importedData.groups) {
-                        // 保留原有的历史记录结构
-                        if (!scoreData.history) {
-                            scoreData.history = [];
-                        }
-                        // 更新 groups 数据
-                        scoreData.groups = importedData.groups;
-                        // 如果导入的数据包含历史记录，也保留它
-                        if (importedData.history) {
-                            scoreData.history = importedData.history;
-                        }
+                        // 迁移导入数据到 v2，兼容旧格式
+                        const migrated = migrateData(importedData);
+                        scoreData.version = migrated.version;
+                        scoreData.groupCount = migrated.groupCount;
+                        scoreData.groups = migrated.groups;
+                        scoreData.rules = migrated.rules;
+                        scoreData.history = migrated.history;
                         saveData(scoreData);
+                        renderGroups(scoreData);
                         loadDataToPage(scoreData);
                         // 导入壁纸设置
                         if (importedData.wallpaper) {
@@ -2532,9 +3480,22 @@ function createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback) {
             const actionInfo = document.createElement('div');
             actionInfo.style.cssText = 'font-weight: 600; margin-bottom: 4px;';
             
-            const groupName = record.group === null ? '全员' : `小组 ${record.group}`;
+            const groupName = (record.group === null || record.group === undefined)
+                ? '全员'
+                : getGroupName(scoreData, record.group);
             actionInfo.textContent = `${formatActionType(record.type)} - ${groupName}`;
             recordItem.appendChild(actionInfo);
+
+            // 成员归属与规则来源
+            const detailParts = [];
+            if (record.memberName) detailParts.push(`成员：${record.memberName}`);
+            if (record.ruleName) detailParts.push(`规则：${record.ruleName}`);
+            if (detailParts.length > 0) {
+                const detailInfo = document.createElement('div');
+                detailInfo.style.cssText = 'font-size: 13px; color: #666; margin-bottom: 4px;';
+                detailInfo.textContent = detailParts.join(' · ');
+                recordItem.appendChild(detailInfo);
+            }
             
             // 时间
             const timeInfo = document.createElement('div');
@@ -2546,9 +3507,12 @@ function createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback) {
             const scoreChange = document.createElement('div');
             scoreChange.style.cssText = 'font-size: 14px; color: #333;';
             
-            if (record.group === null) {
+            if (record.group === null || record.group === undefined) {
                 // 全员操作，显示简要信息
                 scoreChange.textContent = '所有小组分数已更新';
+            } else if (typeof record.beforeContribution === 'number' && typeof record.afterContribution === 'number') {
+                // 个人贡献计分：同时展示小组分数与成员贡献的变化
+                scoreChange.textContent = `分数 ${record.before} → ${record.after}　贡献 ${record.beforeContribution} → ${record.afterContribution}`;
             } else {
                 scoreChange.textContent = `${record.before} → ${record.after}`;
             }
@@ -2617,21 +3581,23 @@ function createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback) {
 
 // 评比分数
 function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
-    let maxScore = -1;
+    const groupCount = getGroupCount(scoreData);
+    let maxScore = null;
     let winningGroup = '';
     
-    for (let i = 1; i <= 7; i++) {
-        const score = scoreData.groups[i.toString()] || 0;
-        if (score > maxScore) {
+    for (let i = 1; i <= groupCount; i++) {
+        const key = i.toString();
+        const score = getGroupScore(scoreData, key);
+        if (maxScore === null || score > maxScore) {
             maxScore = score;
-            winningGroup = i;
+            winningGroup = key;
         }
     }
     
     if (winningGroup) {
-        createEvaluateResultPopup(`小组 ${winningGroup} 得分最高，分数为 ${maxScore}！`, () => {
-            for (let i = 1; i <= 7; i++) {
-                scoreData.groups[i.toString()] = 0;
+        createEvaluateResultPopup(`${getGroupName(scoreData, winningGroup)} 得分最高，分数为 ${maxScore}！`, () => {
+            for (let i = 1; i <= groupCount; i++) {
+                setGroupScore(scoreData, i.toString(), 0);
             }
             clearHistory(scoreData);
             saveData(scoreData);

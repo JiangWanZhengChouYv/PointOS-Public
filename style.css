@@ -433,6 +433,147 @@ main {
     transform: translateY(0) scale(0.97);
 }
 
+.score-members {
+    margin-top: 12px;
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: white;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.score-members:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.score-members:active {
+    transform: translateY(0) scale(0.97);
+}
+
+/* 小组设置 / 成员管理 */
+.settings-section {
+    margin: 15px 0;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    text-align: left;
+}
+
+.settings-label {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.settings-subtitle {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #374151;
+}
+
+.settings-input {
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.settings-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.group-name-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.group-name-label {
+    flex: 0 0 60px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.group-name-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.group-name-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.member-list {
+    max-height: 260px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.member-item:last-child {
+    border-bottom: none;
+}
+
+.member-coord {
+    flex: 0 0 70px;
+    font-size: 13px;
+    color: #6b7280;
+}
+
+.member-name-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.member-name-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.member-empty {
+    padding: 20px;
+    text-align: center;
+    font-size: 14px;
+    color: #9ca3af;
+}
+
+.rule-list {
+    max-height: 260px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
 .global-controls {
     display: flex;
     justify-content: center;
