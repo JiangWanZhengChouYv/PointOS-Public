@@ -1,11 +1,11 @@
 // Service Worker for 班级积分管理系统
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `class-score-system-${CACHE_VERSION}`;
 // 路径需带 ?v= 与 index.html 中的实际引用保持一致，离线时才可命中缓存
 const ASSETS_TO_CACHE = [
   'index.html',
-  'style.min.css?v=1.7.0',
-  'script.min.js?v=1.7.0'
+  'style.min.css?v=1.8.0',
+  'script.min.js?v=1.8.0'
 ];
 
 // 安装Service Worker

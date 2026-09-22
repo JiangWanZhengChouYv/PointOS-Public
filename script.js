@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.7.0
+// 版本: 1.8.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,7 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.7.0';
+const CURRENT_VERSION = '1.8.0';
 
 // 学科配置（可切换，共享组数与小组名字，其余各自独立）
 const SUBJECTS = ['语文', '数学', '英语'];
@@ -438,6 +438,17 @@ function getPerformanceDescription() {
 // 版本日志数据
 const VERSION_LOGS = [
     {
+        version: '1.8.0',
+        date: '2026-09-22',
+        changes: [
+            '【界面优化】全部实心按钮改用统一的磨砂材质：顶部受光高光、底部暗边与柔和落影，覆盖主界面、设置、弹窗与提示条等所有按钮',
+            '【界面优化】按钮配色整体调亮为柔和浅色调：浅靛蓝、薄荷绿、珊瑚红、浅橙与天蓝，降低饱和与明度压迫感',
+            '【界面优化】中性按钮（取消、设置、稍后更新等）改为浅灰底深色字，层次更轻',
+            '【界面优化】按下时改为轻微下沉并加深内阴影，悬停时提亮，操作反馈更明确',
+            '【界面优化】贡献榜组内榜/跨组榜切换、确认弹窗等按钮统一配色，原有渐变与半透明内联样式已清除'
+        ]
+    },
+    {
         version: '1.7.0',
         date: '2026-09-22',
         changes: [
@@ -679,7 +690,6 @@ function showVersionUpdatePopup(lastVersion, newVersion, onClose) {
     const closeButton = document.createElement('button');
     closeButton.className = 'popup-button';
     closeButton.textContent = '知道了';
-    closeButton.style.cssText = 'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;';
     closeButton.addEventListener('click', () => {
         localStorage.setItem(LAST_VIEW_VERSION_KEY, CURRENT_VERSION);
         overlay.classList.add('closing');
@@ -1989,9 +1999,9 @@ function createRuleManagementPopup(scoreData, saveData) {
             row.appendChild(saveButton);
 
             const deleteButton = document.createElement('button');
-            deleteButton.className = 'popup-button';
+            deleteButton.className = 'popup-button frost-solid frost-danger';
             deleteButton.textContent = '删除';
-            deleteButton.style.cssText = 'flex: 0 0 auto; margin: 0; padding: 6px 10px; font-size: 13px; background: #ef4444; color: white;';
+            deleteButton.style.cssText = 'flex: 0 0 auto; margin: 0; padding: 6px 10px; font-size: 13px;';
             deleteButton.addEventListener('click', () => {
                 createConfirmPopup('确认删除', `确定要删除规则"${rule.name}"吗？`, () => {
                     const rules = getRules(scoreData);
@@ -2141,50 +2151,14 @@ function showUpdateNotification(message) {
     
     const updateButton = document.createElement('button');
     updateButton.textContent = '立即更新';
-    updateButton.style.cssText = `
-        background: white;
-        color: #667eea;
-        border: none;
-        padding: 10px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
-        transition: all 0.2s;
-        flex: 1;
-    `;
-    updateButton.onmouseover = () => {
-        updateButton.style.transform = 'translateY(-2px)';
-        updateButton.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-    };
-    updateButton.onmouseout = () => {
-        updateButton.style.transform = 'translateY(0)';
-        updateButton.style.boxShadow = 'none';
-    };
+    updateButton.className = 'notify-btn notify-btn-primary';
     updateButton.onclick = () => {
         window.location.reload();
     };
     
     const laterButton = document.createElement('button');
     laterButton.textContent = '稍后更新';
-    laterButton.style.cssText = `
-        background: rgba(255,255,255,0.2);
-        color: white;
-        border: 1px solid rgba(255,255,255,0.3);
-        padding: 10px 20px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.2s;
-        flex: 1;
-    `;
-    laterButton.onmouseover = () => {
-        laterButton.style.background = 'rgba(255,255,255,0.3)';
-    };
-    laterButton.onmouseout = () => {
-        laterButton.style.background = 'rgba(255,255,255,0.2)';
-    };
+    laterButton.className = 'notify-btn notify-btn-ghost';
     laterButton.onclick = () => {
         notification.style.animation = 'slideOut 0.3s ease-in forwards';
         setTimeout(() => {
@@ -3117,12 +3091,14 @@ function createContributionRankPopup(scoreData, saveData, loadDataToPage, addFee
 
     const groupTabButton = document.createElement('button');
     groupTabButton.textContent = '组内榜';
+    groupTabButton.className = 'frost-solid';
 
     const allTabButton = document.createElement('button');
     allTabButton.textContent = '跨组榜';
+    allTabButton.className = 'frost-solid';
 
-    const activeTabStyle = 'flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: #fff;';
-    const inactiveTabStyle = 'flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f3f4f6; color: #374151;';
+    const activeTabStyle = 'flex: 1; padding: 10px; border: 1px solid var(--frost-edge); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #818cf8; color: #fff; box-shadow: var(--frost-shadow);';
+    const inactiveTabStyle = 'flex: 1; padding: 10px; border: 1px solid var(--frost-edge-neutral); border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #f3f4f6; color: #374151; box-shadow: var(--frost-shadow-neutral);';
 
     const updateTabStyles = () => {
         groupTabButton.style.cssText = currentMode === 'group' ? activeTabStyle : inactiveTabStyle;
@@ -3285,9 +3261,9 @@ function createContributionRankPopup(scoreData, saveData, loadDataToPage, addFee
             itemElement.appendChild(change);
 
             const undoButton = document.createElement('button');
-            undoButton.className = 'popup-button';
+            undoButton.className = 'popup-button frost-solid frost-warn';
             undoButton.textContent = '撤销';
-            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px; background: #ff9800;';
+            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px;';
             undoButton.addEventListener('click', function() {
                 createConfirmPopup('确认撤销', '确定要撤销这条操作吗？', function() {
                     if (undoHistoryRecord(scoreData, entry.index, saveData, loadDataToPage, addFeedback)) {
@@ -3688,9 +3664,8 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     
     // 配置 GitHub Token
     const tokenConfigButton = document.createElement('button');
-    tokenConfigButton.className = 'popup-button';
+    tokenConfigButton.className = 'popup-button frost-solid frost-indigo';
     tokenConfigButton.textContent = '🔑 配置 GitHub Token';
-    tokenConfigButton.style.backgroundColor = '#6366f1';
     tokenConfigButton.addEventListener('click', function() {
         const currentToken = getGitHubToken();
         const token = prompt('请输入你的 GitHub Personal Access Token：\n\n提示：\n1. 访问 https://github.com/settings/tokens 生成 Token\n2. 勾选 "gist" 权限\n3. Token 格式: ghp_xxxxxxxx', currentToken || '');
@@ -3711,9 +3686,8 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     
     // 备份到云端
     const backupButton = document.createElement('button');
-    backupButton.className = 'popup-button';
+    backupButton.className = 'popup-button frost-solid frost-indigo';
     backupButton.textContent = '📤 备份到云端';
-    backupButton.style.backgroundColor = '#6366f1';
     backupButton.addEventListener('click', async function() {
         backupButton.disabled = true;
         backupButton.textContent = '备份中...';
@@ -3736,9 +3710,8 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     
     // 从云端恢复
     const restoreButton = document.createElement('button');
-    restoreButton.className = 'popup-button';
+    restoreButton.className = 'popup-button frost-solid frost-warn';
     restoreButton.textContent = '📥 从云端恢复';
-    restoreButton.style.backgroundColor = '#f59e0b';
     restoreButton.addEventListener('click', async function() {
         const gistId = localStorage.getItem(GIST_ID_KEY);
         if (!gistId) {
@@ -3839,7 +3812,6 @@ function createConfirmPopup(titleText, message, onConfirm, onCancel) {
     const cancelButton = document.createElement('button');
     cancelButton.className = 'popup-button';
     cancelButton.textContent = '取消';
-    cancelButton.style.cssText = 'background: #e0e0e0; color: #333;';
     cancelButton.addEventListener('click', () => {
         overlay.classList.add('closing');
         popup.classList.add('closing');
@@ -3851,7 +3823,7 @@ function createConfirmPopup(titleText, message, onConfirm, onCancel) {
     buttonContainer.appendChild(cancelButton);
     
     const confirmButton = document.createElement('button');
-    confirmButton.className = 'popup-button';
+    confirmButton.className = 'popup-button frost-solid frost-indigo';
     confirmButton.textContent = '确定';
     confirmButton.addEventListener('click', () => {
         overlay.classList.add('closing');
@@ -4005,9 +3977,9 @@ function createHistoryPopup(scoreData, saveData, loadDataToPage, addFeedback) {
             
             // 撤销按钮
             const undoButton = document.createElement('button');
-            undoButton.className = 'popup-button';
+            undoButton.className = 'popup-button frost-solid frost-warn';
             undoButton.textContent = '撤销';
-            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px; background: #ff9800;';
+            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px;';
             undoButton.addEventListener('click', function() {
                 createConfirmPopup('确认撤销', '确定要撤销这条操作吗？', function() {
                     if (undoHistoryRecord(scoreData, recordIndex, saveData, loadDataToPage, addFeedback)) {
@@ -4203,27 +4175,29 @@ function showUpdateNotification(newVersion, currentVersion) {
         }
         .update-btn {
             padding: 6px 16px;
-            border: none;
             border-radius: 4px;
             font-size: 13px;
             cursor: pointer;
             transition: all 0.2s;
         }
         .update-now {
-            background: white;
-            color: #667eea;
+            background: #ffffff;
+            color: #4f46e5;
             font-weight: 600;
+            border: 1px solid var(--frost-edge-neutral);
+            box-shadow: var(--frost-shadow-neutral);
         }
         .update-now:hover {
-            background: #f0f0f0;
-            transform: scale(1.05);
+            filter: brightness(0.96);
         }
         .update-later {
-            background: rgba(255,255,255,0.2);
-            color: white;
+            background: #cbd5e1;
+            color: #334155;
+            border: 1px solid var(--frost-edge);
+            box-shadow: var(--frost-shadow);
         }
         .update-later:hover {
-            background: rgba(255,255,255,0.3);
+            filter: brightness(1.12);
         }
     `;
     document.head.appendChild(style);
