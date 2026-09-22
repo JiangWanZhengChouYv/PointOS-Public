@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.6.0
+// 版本: 1.7.0
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,13 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.6.0';
+const CURRENT_VERSION = '1.7.0';
+
+// 学科配置（可切换，共享组数与小组名字，其余各自独立）
+const SUBJECTS = ['语文', '数学', '英语'];
+let scoreData = null;
+let subjectStore = null;
+let activeSubject = '语文';
 
 // 数据版本与小组数量配置
 const DATA_VERSION = 2;
@@ -130,26 +136,15 @@ function handleGistError(error, defaultMessage) {
 // 备份到云端
 async function backupToCloud() {
     try {
-        const existingData = localStorage.getItem(STORAGE_KEY);
-        let parsedData = null;
-        if (existingData) {
-            try {
-                parsedData = JSON.parse(existingData);
-            } catch (error) {
-                parsedData = null;
-            }
-        }
-        const scoreData = migrateData(parsedData);
         const wallpaperSettings = JSON.parse(localStorage.getItem(WALLPAPER_STORAGE_KEY) || '{}');
         
+        // 备份全部学科数据
         const backupData = {
-            version: scoreData.version,
+            version: DATA_VERSION,
             appVersion: CURRENT_VERSION,
             backupTime: new Date().toISOString(),
-            groupCount: scoreData.groupCount,
-            groups: scoreData.groups,
-            rules: scoreData.rules,
-            history: scoreData.history || [],
+            activeSubject: activeSubject || SUBJECTS[0],
+            subjects: subjectStore ? subjectStore.subjects : {},
             wallpaper: wallpaperSettings
         };
         
@@ -191,13 +186,16 @@ async function restoreFromCloud() {
         
         const backupData = await fetchGist(token, gistId);
         
-        if (!backupData || !backupData.groups) {
+        // 兼容旧版单学科备份 / 新版多学科备份
+        if (!backupData || (!backupData.groups && !isSubjectStore(backupData))) {
             return { success: false, error: '云端数据格式错误' };
         }
         
-        // 恢复走迁移，兼容旧版本备份（无 version/groupCount/rules/members）
-        const migratedData = migrateData(backupData);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedData));
+        const rebuilt = buildSubjectStore(backupData);
+        subjectStore = rebuilt;
+        activeSubject = rebuilt.activeSubject;
+        scoreData = rebuilt.subjects[activeSubject];
+        saveStore();
         
         if (backupData.wallpaper) {
             localStorage.setItem(WALLPAPER_STORAGE_KEY, JSON.stringify(backupData.wallpaper));
@@ -439,6 +437,23 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.7.0',
+        date: '2026-09-22',
+        changes: [
+            '【新增功能】新增语文、数学、英语三科切换，头部按钮一键切换，三科积分各自独立',
+            '【新增功能】三科共享小组数量与小组名字，修改时自动同步到各科；加分规则、成员、贡献与历史互不影响',
+            '【数据兼容】数据结构升级为多学科容器，旧数据自动归入「语文」，云备份与导出/导入兼容新旧格式'
+        ]
+    },
+    {
+        version: '1.6.1',
+        date: '2026-09-22',
+        changes: [
+            '【新增功能】贡献榜中的成员可点击，进入该成员的计分回看，按时间倒序查看每一次加分/减分明细',
+            '【新增功能】回看明细中可对单条记录撤销，撤销后成员贡献与小组分数即时更新'
+        ]
+    },
     {
         version: '1.6.0',
         date: '2026-09-21',
@@ -1004,20 +1019,53 @@ function getRules(data) {
 // 初始化数据（含旧数据自动迁移）
 function initData() {
     const existingData = localStorage.getItem(STORAGE_KEY);
-    let data = null;
+    let raw = null;
     if (existingData) {
         try {
-            data = JSON.parse(existingData);
+            raw = JSON.parse(existingData);
         } catch (error) {
-            data = null;
+            raw = null;
         }
     }
-    const migrated = migrateData(data);
-    // 仅在首次使用或需要迁移时写回，避免重复迁移/重置
-    if (!data || data.version !== DATA_VERSION) {
-        saveData(migrated);
+    const store = buildSubjectStore(raw);
+    subjectStore = store;
+    activeSubject = store.activeSubject || SUBJECTS[0];
+    scoreData = store.subjects[activeSubject];
+    // 首次使用或需要迁移时写回
+    if (!store._dirty && !isSubjectStore(raw)) {
+        saveStore();
     }
-    return migrated;
+    return scoreData;
+}
+
+// 判断是否为多学科容器结构
+function isSubjectStore(obj) {
+    return !!(obj && obj.subjects && typeof obj.subjects === 'object' && SUBJECTS.every(function(sub) { return sub in obj.subjects; }));
+}
+
+// 构建多学科容器：旧数据/旧容器迁移
+function buildSubjectStore(raw) {
+    const stored = isSubjectStore(raw);
+    const subjects = {};
+    if (stored) {
+        SUBJECTS.forEach(function(sub) {
+            subjects[sub] = migrateData(raw.subjects[sub]);
+        });
+        const active = SUBJECTS.indexOf(raw.activeSubject) >= 0 ? raw.activeSubject : SUBJECTS[0];
+        return { version: DATA_VERSION, activeSubject: active, subjects: subjects };
+    }
+    // 旧版单学科数据，归到原学科（默认语文），其余学科用默认数据
+    let legacy = SUBJECTS.indexOf((raw && raw.subject) || SUBJECTS[0]);
+    if (legacy < 0) legacy = 0;
+    SUBJECTS.forEach(function(sub, index) {
+        subjects[sub] = (index === legacy) ? migrateData(raw) : createDefaultData();
+    });
+    return { version: DATA_VERSION, activeSubject: SUBJECTS[legacy], subjects: subjects };
+}
+
+// 整体保存学科容器到 localStorage
+function saveStore() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(subjectStore));
 }
 
 // 添加历史记录
@@ -1133,6 +1181,12 @@ function undoHistoryRecord(scoreData, recordIndex, saveData, loadDataToPage, add
 
 // 保存数据到localStorage
 function saveData(data) {
+    // 若为多学科容器，将当前学科数据写回容器后再整体保存
+    if (subjectStore && subjectStore.subjects && data) {
+        subjectStore.subjects[activeSubject] = data;
+        saveStore();
+        return;
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
@@ -1692,13 +1746,18 @@ function createScoreOptionsPanel(scoreData, defaultDirection, onApply) {
     ruleList.className = 'rule-list';
 
     const rules = getRules(scoreData);
-    if (rules.length === 0) {
+    const addMode = defaultDirection !== 'subtract';
+    const filteredRules = rules.filter(rule => {
+        const ruleValue = Number(rule.value) || 0;
+        return addMode ? ruleValue >= 0 : ruleValue < 0;
+    });
+    if (filteredRules.length === 0) {
         const empty = document.createElement('div');
         empty.className = 'member-empty';
-        empty.textContent = '暂无规则，可在设置中添加';
+        empty.textContent = rules.length === 0 ? '暂无规则，可在设置中添加' : '暂无此类方向的规则，可在设置中添加';
         ruleList.appendChild(empty);
     } else {
-        rules.forEach(rule => {
+        filteredRules.forEach(rule => {
             const ruleValue = Number(rule.value) || 0;
             const ruleButton = document.createElement('button');
             ruleButton.className = 'popup-button';
@@ -2171,6 +2230,74 @@ function showUpdateNotification(message) {
     document.body.appendChild(notification);
 }
 
+// 渲染头部学科导航按钮
+function renderSubjectNav() {
+    const header = document.querySelector('header');
+    if (!header) return;
+    let nav = header.querySelector('.subject-nav');
+    if (!nav) {
+        nav = document.createElement('nav');
+        nav.className = 'subject-nav';
+        header.insertBefore(nav, header.querySelector('.global-controls'));
+    }
+    nav.innerHTML = '';
+    SUBJECTS.forEach(function(sub) {
+        const btn = document.createElement('button');
+        btn.className = 'subject-btn' + (sub === activeSubject ? ' active' : '');
+        btn.textContent = sub;
+        btn.dataset.subject = sub;
+        btn.addEventListener('click', function() {
+            if (sub === activeSubject) return;
+            switchSubject(sub);
+        });
+        nav.appendChild(btn);
+    });
+}
+
+// 切换学科
+function switchSubject(subject) {
+    if (!subjectStore || !subjectStore.subjects || subjectStore.subjects[subject] === undefined) {
+        return;
+    }
+    scoreData = subjectStore.subjects[subject];
+    activeSubject = subject;
+    subjectStore.activeSubject = subject;
+    saveStore();
+    renderGroups(scoreData);
+    loadDataToPage(scoreData);
+    renderSubjectNav();
+    // 同步共享字段（组数与小组名字）到各科
+    syncSharedAcrossSubjects();
+}
+
+// 将当前学科的组数与小组名字同步到所有学科（分数/成员/规则/历史保持各自独立）
+function syncSharedAcrossSubjects() {
+    if (!subjectStore || !subjectStore.subjects) return;
+    const count = getGroupCount(scoreData);
+    SUBJECTS.forEach(function(sub) {
+        syncGroupNameAndCountTo(subjectStore.subjects[sub], count);
+    });
+}
+
+// 把指定学科数据校正为给定组数，并复制共享的小组名字
+function syncGroupNameAndCountTo(target, count) {
+    const srcGroups = scoreData.groups || {};
+    const targetGroups = {};
+    for (let i = 1; i <= count; i++) {
+        const key = i.toString();
+        const existing = target.groups ? target.groups[key] : undefined;
+        const base = createDefaultGroup(i);
+        const group = existing || base;
+        group.score = existing ? (Number(existing.score) || 0) : 0;
+        group.members = existing && Array.isArray(existing.members) ? existing.members : [];
+        // 小组名字跟随当前学科
+        group.name = (srcGroups[key] && srcGroups[key].name) ? srcGroups[key].name : base.name;
+        targetGroups[key] = group;
+    }
+    target.groups = targetGroups;
+    target.groupCount = count;
+}
+
 // 主函数
 function init() {
     // 检查本地版本更新
@@ -2193,10 +2320,15 @@ function init() {
         applyWallpaper(wallpaperSettings);
     }
     
-    let scoreData = initData();
+    scoreData = initData();
+    
+    // 首次加载即同步三科组数与小组名字（共享字段）
+    syncSharedAcrossSubjects();
+    saveStore();
     
     renderGroups(scoreData);
     loadDataToPage(scoreData);
+    renderSubjectNav();
     
     // 使用事件委托优化事件监听器管理
     const scoreContainer = document.querySelector('.score-container');
@@ -2274,7 +2406,9 @@ function init() {
                 createConfirmPopup('确认重置', '确定要重置所有小组的积分吗？', () => {
                     const groupCount = getGroupCount(scoreData);
                     for (let i = 1; i <= groupCount; i++) {
-                        setGroupScore(scoreData, i.toString(), 0);
+                        const key = i.toString();
+                        setGroupScore(scoreData, key, 0);
+                        getGroupMembers(scoreData, key).forEach(member => setMemberContribution(member, 0));
                     }
                     clearHistory(scoreData);
                     saveData(scoreData);
@@ -2294,7 +2428,7 @@ function init() {
             } else if (target.classList.contains('evaluate')) {
                 evaluateScore(scoreData, saveData, loadDataToPage, addFeedback);
             } else if (target.classList.contains('contribution-rank')) {
-                createContributionRankPopup(scoreData);
+                createContributionRankPopup(scoreData, saveData, loadDataToPage, addFeedback);
             }
         });
     }
@@ -2462,6 +2596,8 @@ function createGroupSettingsPopup(scoreData, saveData, loadDataToPage) {
 
         const apply = () => {
             applyGroupCount(scoreData, newCount);
+            // 组数三科同步（共享组数与小组名字）
+            syncSharedAcrossSubjects();
             saveData(scoreData);
             renderGroups(scoreData);
             loadDataToPage(scoreData);
@@ -2523,9 +2659,11 @@ function createGroupSettingsPopup(scoreData, saveData, loadDataToPage) {
                 group.name = value || `小组 ${item.group}`;
             }
         });
+        // 小组名字三科同步
+        syncSharedAcrossSubjects();
         saveData(scoreData);
         loadDataToPage(scoreData);
-        showToast('✅ 小组名称已保存', 'success');
+        showToast('✅ 小组名称已保存到所有学科', 'success');
     });
     nameSection.appendChild(saveNamesButton);
     popup.appendChild(nameSection);
@@ -2940,7 +3078,8 @@ function collectContributionRanking(scoreData, groupFilter) {
                 group: group,
                 groupName: getGroupName(scoreData, group),
                 name: getMemberDisplayName(member),
-                contribution: getMemberContribution(member)
+                contribution: getMemberContribution(member),
+                memberId: member.id
             });
         });
     });
@@ -2950,7 +3089,7 @@ function collectContributionRanking(scoreData, groupFilter) {
 }
 
 // 创建贡献榜弹出层（组内榜 + 跨组榜）
-function createContributionRankPopup(scoreData) {
+function createContributionRankPopup(scoreData, saveData, loadDataToPage, addFeedback) {
     const overlay = document.createElement('div');
     overlay.className = 'popup-overlay';
 
@@ -3008,6 +3147,10 @@ function createContributionRankPopup(scoreData) {
     listContainer.className = 'member-list';
     listContainer.style.cssText = 'max-height: 320px; overflow-y: auto; margin-bottom: 10px; border: 1px solid #e0e0e0; border-radius: 8px; padding: 8px;';
 
+    const detailContainer = document.createElement('div');
+    detailContainer.className = 'member-history-view';
+    detailContainer.style.display = 'none';
+
     const render = () => {
         listContainer.innerHTML = '';
         const filter = currentMode === 'group' ? currentGroup : null;
@@ -3024,7 +3167,8 @@ function createContributionRankPopup(scoreData) {
 
         ranking.forEach((item, index) => {
             const row = document.createElement('div');
-            row.className = 'member-item';
+            row.className = 'member-item clickable';
+            row.addEventListener('click', function() { showMemberView(item); });
 
             const rank = document.createElement('span');
             rank.style.cssText = 'flex: 0 0 36px; font-size: 13px; font-weight: 600; color: #6b7280;';
@@ -3058,6 +3202,105 @@ function createContributionRankPopup(scoreData) {
         render();
     };
 
+    function showRankView() {
+        title.textContent = '贡献榜';
+        tabRow.style.display = '';
+        groupSelect.style.display = currentMode === 'group' ? '' : 'none';
+        listContainer.style.display = '';
+        detailContainer.style.display = 'none';
+        refresh();
+    }
+
+    function showMemberView(item) {
+        title.textContent = item.name;
+        tabRow.style.display = 'none';
+        groupSelect.style.display = 'none';
+        listContainer.style.display = 'none';
+        detailContainer.style.display = '';
+        renderMemberHistory(item);
+    }
+
+    function renderMemberHistory(item) {
+        detailContainer.innerHTML = '';
+
+        const backButton = document.createElement('button');
+        backButton.className = 'member-history-back';
+        backButton.textContent = '← 返回榜单';
+        backButton.addEventListener('click', showRankView);
+        detailContainer.appendChild(backButton);
+
+        const member = getGroupMembers(scoreData, item.group).find(function(m) { return m.id === item.memberId; });
+        const currentContribution = member ? getMemberContribution(member) : item.contribution;
+
+        const records = [];
+        scoreData.history.forEach(function(record, index) {
+            if (record.memberId === item.memberId && (record.type === 'add-member' || record.type === 'subtract-member')) {
+                records.push({ record: record, index: index });
+            }
+        });
+        records.reverse();
+
+        const summary = document.createElement('div');
+        summary.className = 'member-history-summary';
+        summary.textContent = `当前贡献：${currentContribution > 0 ? '+' + currentContribution : currentContribution}　共 ${records.length} 条记录`;
+        detailContainer.appendChild(summary);
+
+        if (records.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'member-history-empty';
+            empty.textContent = '该成员暂无计分记录';
+            detailContainer.appendChild(empty);
+            return;
+        }
+
+        records.forEach(function(entry) {
+            const record = entry.record;
+            const itemElement = document.createElement('div');
+            itemElement.className = 'member-history-item';
+
+            const action = document.createElement('div');
+            action.className = 'member-history-action';
+            action.textContent = `${formatActionType(record.type)} - ${getGroupName(scoreData, record.group)}`;
+            itemElement.appendChild(action);
+
+            if (record.ruleName) {
+                const meta = document.createElement('div');
+                meta.className = 'member-history-meta';
+                meta.textContent = `规则：${record.ruleName}`;
+                itemElement.appendChild(meta);
+            }
+
+            const time = document.createElement('div');
+            time.className = 'member-history-time';
+            time.textContent = formatTimestamp(record.timestamp);
+            itemElement.appendChild(time);
+
+            const change = document.createElement('div');
+            change.className = 'member-history-change';
+            if (typeof record.beforeContribution === 'number' && typeof record.afterContribution === 'number') {
+                change.textContent = `贡献 ${record.beforeContribution} → ${record.afterContribution}　分数 ${record.before} → ${record.after}`;
+            } else {
+                change.textContent = `${record.before} → ${record.after}`;
+            }
+            itemElement.appendChild(change);
+
+            const undoButton = document.createElement('button');
+            undoButton.className = 'popup-button';
+            undoButton.textContent = '撤销';
+            undoButton.style.cssText = 'margin-top: 8px; padding: 4px 12px; font-size: 12px; background: #ff9800;';
+            undoButton.addEventListener('click', function() {
+                createConfirmPopup('确认撤销', '确定要撤销这条操作吗？', function() {
+                    if (undoHistoryRecord(scoreData, entry.index, saveData, loadDataToPage, addFeedback)) {
+                        renderMemberHistory(item);
+                    }
+                });
+            });
+            itemElement.appendChild(undoButton);
+
+            detailContainer.appendChild(itemElement);
+        });
+    }
+
     groupTabButton.addEventListener('click', () => {
         currentMode = 'group';
         refresh();
@@ -3076,6 +3319,7 @@ function createContributionRankPopup(scoreData) {
     popup.appendChild(tabRow);
     popup.appendChild(groupSelect);
     popup.appendChild(listContainer);
+    popup.appendChild(detailContainer);
 
     const closeButton = document.createElement('button');
     closeButton.className = 'popup-cancel';
@@ -3318,15 +3562,13 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     exportButton.className = 'popup-button';
     exportButton.textContent = '导出JSON';
     exportButton.addEventListener('click', function() {
-        // 包含壁纸设置信息
+        // 包含壁纸设置信息与全部学科数据
         const wallpaperSettings = initWallpaperSettings();
         const exportData = {
-            version: scoreData.version,
-            groupCount: scoreData.groupCount,
-            groups: scoreData.groups,
-            rules: scoreData.rules,
-            wallpaper: wallpaperSettings,
-            history: scoreData.history
+            version: DATA_VERSION,
+            activeSubject: activeSubject,
+            subjects: subjectStore ? subjectStore.subjects : {},
+            wallpaper: wallpaperSettings
         };
         const dataStr = JSON.stringify(exportData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
@@ -3361,8 +3603,22 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             reader.onload = function(e) {
                 try {
                     const importedData = JSON.parse(e.target.result);
-                    if (importedData && importedData.groups) {
-                        // 迁移导入数据到 v2，兼容旧格式
+                    // 兼容：新格式（含 subjects）或旧格式（单条数据）
+                    if (importedData && isSubjectStore(importedData)) {
+                        const rebuilt = buildSubjectStore(importedData);
+                        subjectStore = rebuilt;
+                        activeSubject = rebuilt.activeSubject;
+                        scoreData = rebuilt.subjects[activeSubject];
+                        renderGroups(scoreData);
+                        loadDataToPage(scoreData);
+                        renderSubjectNav();
+                        if (importedData.wallpaper) {
+                            saveWallpaperSettings(importedData.wallpaper);
+                            applyWallpaper(importedData.wallpaper);
+                        }
+                        alert('导入成功！');
+                    } else if (importedData && importedData.groups) {
+                        // 迁移导入数据到 v2，兼容旧格式，仅导入当前学科
                         const migrated = migrateData(importedData);
                         scoreData.version = migrated.version;
                         scoreData.groupCount = migrated.groupCount;
@@ -3826,7 +4082,9 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     if (winningGroup) {
         createEvaluateResultPopup(`${getGroupName(scoreData, winningGroup)} 得分最高，分数为 ${maxScore}！`, () => {
             for (let i = 1; i <= groupCount; i++) {
-                setGroupScore(scoreData, i.toString(), 0);
+                const key = i.toString();
+                setGroupScore(scoreData, key, 0);
+                getGroupMembers(scoreData, key).forEach(member => setMemberContribution(member, 0));
             }
             clearHistory(scoreData);
             saveData(scoreData);
