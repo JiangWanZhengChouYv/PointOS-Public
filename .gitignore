@@ -2,3 +2,8 @@
 .DS_Store
 Electron/node_modules/
 Electron/dist/
+
+# Tauri 桌面版
+/desktop-dist/
+/src-tauri/target/
+/src-tauri/gen/schemas/

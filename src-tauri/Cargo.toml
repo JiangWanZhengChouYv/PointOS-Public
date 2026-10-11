@@ -1,0 +1,16 @@
+[package]
+name = "class-score-desktop"
+version = "1.8.0"
+description = "班级积分管理系统 桌面版"
+authors = ["JiangWanZhengChouYv"]
+repository = "https://github.com/JiangWanZhengChouYv/PointOS-Public"
+license = "MIT"
+edition = "2021"
+rust-version = "1.77.2"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
