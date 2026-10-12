@@ -2,7 +2,7 @@
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
 /// 开机自启开关。自定义命令不走插件 ACL，所以悬浮球不需要 npm 版的插件 JS API。
@@ -85,15 +85,10 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open-main" => show_main(app),
+                    // 可见性只由设置项决定：托盘把切换交给主窗口改设置，
+                    // 否则托盘隐藏之后，设置里任何一次改动都会又把球弹出来
                     "toggle-widget" => {
-                        if let Some(widget) = app.get_webview_window("widget") {
-                            if widget.is_visible().unwrap_or(false) {
-                                let _ = widget.hide();
-                            } else {
-                                let _ = widget.show();
-                                let _ = widget.set_focus();
-                            }
-                        }
+                        let _ = app.emit_to("main", "widget:toggle-from-tray", ());
                     }
                     "quit" => app.exit(0),
                     _ => {}

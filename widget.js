@@ -26,6 +26,7 @@
   const ballSubjectEl = document.getElementById('ballSubject');
   const panelSubjectEl = document.getElementById('panelSubject');
   const collapseBtn = document.getElementById('collapse');
+  const panelHead = document.getElementById('panelHead');
   const backBtn = document.getElementById('back');
   const openMainBtn = document.getElementById('openMain');
 
@@ -246,7 +247,6 @@
     expanded = true;
     document.body.dataset.state = 'expanded';
     render();
-    refreshPosition();
   }
 
   async function collapse() {
@@ -258,7 +258,6 @@
       writeJson(GEOMETRY_KEY, restoreOrigin);
       restoreOrigin = null;
     }
-    refreshPosition();
   }
 
   function setMode(next) {
@@ -303,41 +302,75 @@
     }
   }
 
-  // 判断「拖还是点」只能比窗口的物理位置：clientX/clientY 是窗口内坐标，
-  // 拖窗口时鼠标相对窗口几乎不动，用它们会把每一次拖拽都误判成点击。
-  let lastWindowPos = null;
-  let pointerStartPos = null;
-
   function refreshPosition() {
-    return win.outerPosition().then(position => {
-      lastWindowPos = { x: position.x, y: position.y };
-      return lastWindowPos;
-    });
+    return win.outerPosition().then(position => ({ x: position.x, y: position.y }));
   }
 
-  function applyEnabledFlag() {
-    const config = readJson(SETTINGS_KEY) || {};
-    if (config.enabled === false) win.hide();
-    else win.show();
+  let positionSaveTimer = null;
+
+  // Windows 上 startDragging 会 ReleaseCapture 并进入原生移动循环，期间的
+  // mouseup 不回页面，只能拖完后延时补读一次位置
+  function schedulePositionSave() {
+    if (positionSaveTimer) clearTimeout(positionSaveTimer);
+    positionSaveTimer = setTimeout(() => {
+      positionSaveTimer = null;
+      refreshPosition().then(position => writeJson(GEOMETRY_KEY, position)).catch(() => {});
+    }, 600);
   }
 
-  ball.addEventListener('pointerdown', () => {
-    pointerStartPos = lastWindowPos;
-  });
+  // 位移超过阈值才交给系统拖拽，否则算点击。整块标 data-tauri-drag-region 不行：
+  // 那会让 mousedown 无条件进原生拖拽，Windows 上页面收不到 mouseup，球点不动。
+  function makeDraggable(el, onCleanClick) {
+    let startScreen = null;
+    let dragging = false;
 
-  ball.addEventListener('pointerup', () => {
-    const start = pointerStartPos;
-    pointerStartPos = null;
-    refreshPosition().then(current => {
-      if (start && Math.hypot(current.x - start.x, current.y - start.y) > 3) {
-        writeJson(GEOMETRY_KEY, current);
+    el.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || event.target.closest('button, select, input, a')) {
+        startScreen = null;
         return;
       }
-      expand();
-    }).catch(() => {
-      expand();
+      startScreen = { x: event.screenX, y: event.screenY };
+      dragging = false;
     });
-  });
+
+    el.addEventListener('pointermove', event => {
+      if (!startScreen || dragging) return;
+      if (Math.hypot(event.screenX - startScreen.x, event.screenY - startScreen.y) > 4) {
+        dragging = true;
+        win.startDragging().then(schedulePositionSave).catch(() => {});
+      }
+    });
+
+    el.addEventListener('pointerup', () => {
+      const wasDragging = dragging;
+      startScreen = null;
+      dragging = false;
+      if (!wasDragging && onCleanClick) onCleanClick();
+    });
+
+    el.addEventListener('pointercancel', () => {
+      startScreen = null;
+      dragging = false;
+    });
+  }
+
+  async function setVisible(enabled) {
+    try {
+      if (enabled) {
+        await win.unminimize();
+        await win.setAlwaysOnTop(true);
+        await win.show();
+        await win.setFocus();
+      } else {
+        await win.hide();
+      }
+    } catch (error) {
+      /* 窗口调用失败不该打断渲染 */
+    }
+  }
+
+  makeDraggable(ball, expand);
+  makeDraggable(panelHead, null);
 
   ball.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -376,15 +409,15 @@
     showFeedback((event.payload && event.payload.message) || '加分失败', 'error');
   });
 
-  T.event.listen('widget:config', () => {
-    applyEnabledFlag();
-    emitTo('main', 'widget:snapshot');
+  T.event.listen('widget:config', event => {
+    const config = event.payload || {};
+    setVisible(config.enabled !== false);
+    if (config.enabled !== false) emitTo('main', 'widget:snapshot');
   });
 
   restoreGeometry().then(() => {
-    applyEnabledFlag();
+    setVisible((readJson(SETTINGS_KEY) || {}).enabled !== false);
     render();
-    refreshPosition();
     // 主窗口可能还在初始化，重试几次直到拿到快照
     let attempts = 0;
     const poll = setInterval(() => {

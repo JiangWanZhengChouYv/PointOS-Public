@@ -557,6 +557,17 @@ function initWidgetBridge() {
 
     api.listen('widget:open-main', showMainWindow);
 
+    // 托盘的「显示 / 隐藏悬浮球」只是改设置项的快捷方式，保证开关只有一个真源
+    api.listen('widget:toggle-from-tray', function() {
+        const settings = initWidgetSettings();
+        const next = !settings.enabled;
+        saveWidgetSettings({ enabled: next, subject: settings.subject });
+        const toggle = document.getElementById('widget-toggle');
+        if (toggle) toggle.checked = next;
+        const info = document.getElementById('widget-info-text');
+        if (info) info.textContent = next ? '悬浮球显示在桌面上' : '悬浮球已隐藏';
+    });
+
     emitToWidget('score:data', widgetSnapshot());
 }
 
@@ -3690,6 +3701,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
         const widgetInfo = document.createElement('div');
         widgetInfo.className = 'performance-info';
         const widgetInfoText = document.createElement('div');
+        widgetInfoText.id = 'widget-info-text';
         widgetInfoText.textContent = widgetSettings.enabled ? '悬浮球显示在桌面上' : '悬浮球已隐藏';
         widgetInfo.appendChild(widgetInfoText);
 

@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="widget.css">
 </head>
 <body data-state="collapsed" data-mode="group">
-    <div id="ball" class="ball" role="button" tabindex="0" aria-label="展开悬浮计分球" data-tauri-drag-region="deep">
+    <div id="ball" class="ball" role="button" tabindex="0" aria-label="展开悬浮计分球">
         <svg viewBox="0 0 100 100" class="ball-art" aria-hidden="true" focusable="false">
             <defs>
                 <linearGradient id="ballBg" x1="0" y1="0" x2="1" y2="1">
@@ -24,7 +24,7 @@
     </div>
 
     <section id="panel" class="panel" hidden>
-        <header class="panel-head" data-tauri-drag-region="deep">
+        <header class="panel-head" id="panelHead">
             <div class="tabs" role="tablist" aria-label="计分对象">
                 <button type="button" id="tabGroup" class="tab is-active" role="tab" aria-selected="true">小组</button>
                 <button type="button" id="tabMember" class="tab" role="tab" aria-selected="false">个人</button>
