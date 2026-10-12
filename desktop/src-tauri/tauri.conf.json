@@ -46,7 +46,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: https://picsum.photos; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.github.com https://www.google.com"
+      "csp": "default-src 'self'; img-src 'self' data: https://picsum.photos; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://api.github.com https://cdn.jsdelivr.net https://www.google.com"
     }
   },
   "bundle": {

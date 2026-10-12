@@ -8,6 +8,22 @@
 
   const WIDGET_SETTINGS_KEY = 'classScoreSystem_widget';
 
+  // 覆盖共享代码里的默认实现：网页版走 blob 下载和 <input type=file>，
+  // WKWebView 没有下载处理，这里换成系统对话框（读写都在 Rust 命令里做）
+  window.saveTextFile = function (fileName, text) {
+    return T.core.invoke('save_text_file', { name: fileName, contents: text })
+      .then(function (savedPath) {
+        if (savedPath && typeof showToast === 'function') {
+          showToast('已导出到 ' + savedPath, 'success');
+        }
+        return savedPath;
+      });
+  };
+
+  window.openTextFile = function () {
+    return T.core.invoke('open_text_file');
+  };
+
   function readSettings() {
     let saved = null;
     try {
@@ -249,6 +265,39 @@
     panel.appendChild(section);
   }
 
+  const VERSION_URL = 'https://cdn.jsdelivr.net/gh/JiangWanZhengChouYv/PointOS-Public@main/web/version.json';
+
+  function isNewer(remote, local) {
+    const a = String(remote).split('.').map(n => parseInt(n, 10) || 0);
+    const b = String(local).split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const x = a[i] || 0;
+      const y = b[i] || 0;
+      if (x !== y) return x > y;
+    }
+    return false;
+  }
+
+  // 桌面版版本来自打包进二进制的 tauri.conf.json，所以本地改代码不会误报更新；
+  // 走 JSDelivr 而不是 api.github.com，是因为教室网络下 CDN 更稳
+  function checkDesktopUpdate() {
+    if (!T.app || !T.app.getVersion) return;
+    Promise.all([
+      T.app.getVersion(),
+      fetch(VERSION_URL, { cache: 'no-store' }).then(response => (response.ok ? response.json() : null))
+    ])
+      .then(function (results) {
+        const local = results[0];
+        const remote = results[1] && results[1].version;
+        if (remote && isNewer(remote, local)) {
+          showToast(`桌面版 v${remote} 已发布，点右上角「下载桌面版」升级`, 'info', 10000);
+        }
+      })
+      .catch(function () {
+        /* 断网或 CDN 抖动都不该影响上课 */
+      });
+  }
+
   function boot() {
     T.event.listen('widget:snapshot', function () {
       pushSnapshot();
@@ -265,6 +314,18 @@
 
     T.event.listen('widget:open-main', showMainWindow);
     T.event.listen('widget:toggle-from-tray', toggleFromTray);
+
+    // WebView 里 target=_blank 不会开新窗口，下载与外链统一交给系统浏览器
+    document.addEventListener('click', function (event) {
+      const link = event.target.closest && event.target.closest('a[target="_blank"]');
+      if (!link || !link.href) return;
+      event.preventDefault();
+      T.core.invoke('open_url', { url: link.href }).catch(function (error) {
+        showToast(`打开链接失败：${error}`, 'error');
+      });
+    });
+
+    setTimeout(checkDesktopUpdate, 1500);
 
     pushSnapshot();
   }

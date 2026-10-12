@@ -4,6 +4,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
+use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_opener::OpenerExt;
 
 /// 开机自启开关。自定义命令不走插件 ACL，所以悬浮球不需要 npm 版的插件 JS API。
 #[tauri::command]
@@ -20,6 +22,57 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|error| error.to_string())
+}
+
+/// WebView 里 target=_blank 不会开新窗口，下载链接得交给系统浏览器
+#[tauri::command]
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|error| error.to_string())
+}
+
+/// 导出：系统保存对话框 + 写文本。放在 Rust 侧做，网页侧不用申请 dialog/fs 权限。
+/// 参数一律单词命名，避开 JS 侧 camelCase / snake_case 转换的不确定性。
+#[tauri::command]
+async fn save_text_file(
+    app: AppHandle,
+    name: String,
+    contents: String,
+) -> Result<Option<String>, String> {
+    let picked = app
+        .dialog()
+        .file()
+        .set_file_name(&name)
+        .add_filter("JSON", &["json"])
+        .blocking_save_file();
+
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+
+    let path = path.into_path().map_err(|error| error.to_string())?;
+    std::fs::write(&path, contents).map_err(|error| error.to_string())?;
+    Ok(Some(path.display().to_string()))
+}
+
+/// 导入：系统打开对话框 + 读文本
+#[tauri::command]
+async fn open_text_file(app: AppHandle) -> Result<Option<String>, String> {
+    let Some(path) = app
+        .dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+
+    let path = path.into_path().map_err(|error| error.to_string())?;
+    let bytes = std::fs::read(&path).map_err(|error| error.to_string())?;
+    String::from_utf8(bytes)
+        .map_err(|error| error.to_string())
+        .map(Some)
 }
 
 /// NSWindowCollectionBehavior 里的两个标志位（Apple 头文件里的枚举常量值）
@@ -90,7 +143,15 @@ fn main() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .invoke_handler(tauri::generate_handler![set_autostart, get_autostart])
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            set_autostart,
+            get_autostart,
+            save_text_file,
+            open_text_file,
+            open_url
+        ])
         // 主窗口点红叉只是隐藏：悬浮球要常驻，数据桥也挂在这个窗口的 JS 上
         .on_window_event(|window, event| {
             if window.label() == "main" {

@@ -9,6 +9,9 @@ const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
 const CURRENT_VERSION = '1.8.0';
 
+// 桌面版安装包统一从最新 Release 拿
+const RELEASES_URL = 'https://github.com/JiangWanZhengChouYv/PointOS-Public/releases/latest';
+
 // 学科配置（可切换，共享组数与小组名字，其余各自独立）
 const SUBJECTS = ['语文', '数学', '英语'];
 let scoreData = null;
@@ -3574,13 +3577,9 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             wallpaper: wallpaperSettings
         };
         const dataStr = JSON.stringify(exportData, null, 2);
-        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'class-score-data.json';
-        link.click();
-        URL.revokeObjectURL(url);
+        saveTextFile('class-score-data.json', dataStr).catch(function (error) {
+            alert(`导出失败：${error}`);
+        });
         overlay.classList.add('closing');
         popup.classList.add('closing');
         setTimeout(() => {
@@ -3594,64 +3593,56 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     importButton.className = 'popup-button';
     importButton.textContent = '导入JSON';
     importButton.addEventListener('click', function() {
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.json';
-        
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedData = JSON.parse(e.target.result);
-                    // 兼容：新格式（含 subjects）或旧格式（单条数据）
-                    if (importedData && isSubjectStore(importedData)) {
-                        const rebuilt = buildSubjectStore(importedData);
-                        subjectStore = rebuilt;
-                        activeSubject = rebuilt.activeSubject;
-                        scoreData = rebuilt.subjects[activeSubject];
-                        renderGroups(scoreData);
-                        loadDataToPage(scoreData);
-                        renderSubjectNav();
-                        if (importedData.wallpaper) {
-                            saveWallpaperSettings(importedData.wallpaper);
-                            applyWallpaper(importedData.wallpaper);
-                        }
-                        alert('导入成功！');
-                    } else if (importedData && importedData.groups) {
-                        // 迁移导入数据到 v2，兼容旧格式，仅导入当前学科
-                        const migrated = migrateData(importedData);
-                        scoreData.version = migrated.version;
-                        scoreData.groupCount = migrated.groupCount;
-                        scoreData.groups = migrated.groups;
-                        scoreData.rules = migrated.rules;
-                        scoreData.history = migrated.history;
-                        saveData(scoreData);
-                        renderGroups(scoreData);
-                        loadDataToPage(scoreData);
-                        // 导入壁纸设置
-                        if (importedData.wallpaper) {
-                            saveWallpaperSettings(importedData.wallpaper);
-                            applyWallpaper(importedData.wallpaper);
-                        }
-                        alert('导入成功！');
-                    } else {
-                        alert('无效的JSON文件格式！');
+        openTextFile().then(function(text) {
+            if (text === null || text === undefined) return;
+
+            try {
+                const importedData = JSON.parse(text);
+                // 兼容：新格式（含 subjects）或旧格式（单条数据）
+                if (importedData && isSubjectStore(importedData)) {
+                    const rebuilt = buildSubjectStore(importedData);
+                    subjectStore = rebuilt;
+                    activeSubject = rebuilt.activeSubject;
+                    scoreData = rebuilt.subjects[activeSubject];
+                    renderGroups(scoreData);
+                    loadDataToPage(scoreData);
+                    renderSubjectNav();
+                    if (importedData.wallpaper) {
+                        saveWallpaperSettings(importedData.wallpaper);
+                        applyWallpaper(importedData.wallpaper);
                     }
-                } catch (error) {
-                    alert('JSON文件解析失败！');
+                    alert('导入成功！');
+                } else if (importedData && importedData.groups) {
+                    // 迁移导入数据到 v2，兼容旧格式，仅导入当前学科
+                    const migrated = migrateData(importedData);
+                    scoreData.version = migrated.version;
+                    scoreData.groupCount = migrated.groupCount;
+                    scoreData.groups = migrated.groups;
+                    scoreData.rules = migrated.rules;
+                    scoreData.history = migrated.history;
+                    saveData(scoreData);
+                    renderGroups(scoreData);
+                    loadDataToPage(scoreData);
+                    if (importedData.wallpaper) {
+                        saveWallpaperSettings(importedData.wallpaper);
+                        applyWallpaper(importedData.wallpaper);
+                    }
+                    alert('导入成功！');
+                } else {
+                    alert('无效的JSON文件格式！');
                 }
-                overlay.classList.add('closing');
-                popup.classList.add('closing');
-                setTimeout(() => {
-                    document.body.removeChild(overlay);
-                }, 400);
-            };
-            reader.readAsText(file);
+            } catch (error) {
+                alert('JSON文件解析失败！');
+            }
+
+            overlay.classList.add('closing');
+            popup.classList.add('closing');
+            setTimeout(() => {
+                document.body.removeChild(overlay);
+            }, 400);
+        }).catch(function(error) {
+            alert(`读取文件失败：${error}`);
         });
-        fileInput.click();
     });
     dataButtonContainer.appendChild(importButton);
     
@@ -3668,6 +3659,16 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     aboutAuthor.className = 'settings-about-item';
     aboutAuthor.textContent = '作者：江晚正愁余';
     aboutInfo.appendChild(aboutAuthor);
+
+    const aboutDownload = document.createElement('div');
+    aboutDownload.className = 'settings-about-item';
+    const downloadLink = document.createElement('a');
+    downloadLink.href = RELEASES_URL;
+    downloadLink.target = '_blank';
+    downloadLink.rel = 'noopener';
+    downloadLink.textContent = '下载桌面版（Windows / macOS）';
+    aboutDownload.appendChild(downloadLink);
+    aboutInfo.appendChild(aboutDownload);
 
     aboutPanel.appendChild(aboutInfo);
 
@@ -3693,10 +3694,14 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     const tokenConfigButton = document.createElement('button');
     tokenConfigButton.className = 'popup-button frost-solid frost-indigo';
     tokenConfigButton.textContent = '🔑 配置 GitHub Token';
-    tokenConfigButton.addEventListener('click', function() {
-        const currentToken = getGitHubToken();
-        const token = prompt('请输入你的 GitHub Personal Access Token：\n\n提示：\n1. 访问 https://github.com/settings/tokens 生成 Token\n2. 勾选 "gist" 权限\n3. Token 格式: ghp_xxxxxxxx', currentToken || '');
-        
+    tokenConfigButton.addEventListener('click', async function() {
+        const token = await uiPrompt(
+            '配置 GitHub Token',
+            '在 github.com/settings/tokens 生成，勾选 gist 权限',
+            'ghp_xxxxxxxx',
+            getGitHubToken() || ''
+        );
+
         if (token !== null) {
             if (token.trim()) {
                 setGitHubToken(token.trim());
@@ -3746,7 +3751,7 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
             return;
         }
         
-        const confirmed = confirm('⚠️ 确认要从云端恢复数据吗？\n\n此操作将覆盖当前所有数据！');
+        const confirmed = await uiConfirm('此操作将覆盖当前所有数据！', '从云端恢复');
         if (!confirmed) return;
         
         restoreButton.disabled = true;
@@ -3815,6 +3820,117 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     popup.addEventListener('wheel', handleScroll);
     
     document.body.appendChild(overlay);
+}
+
+// 应用内确认框与输入框。原生 confirm/prompt 需要同步返回值，异步的系统对话框
+// 替换不了调用点，所以统一改成 await 这两个 Promise 版本：
+// WKWebView 里原生弹窗没实现，网页版也顺便摆脱了浏览器风格不一致的对话框。
+function uiConfirm(message, titleText) {
+    return new Promise(resolve => {
+        createConfirmPopup(titleText || '请确认', message,
+            () => resolve(true),
+            () => resolve(false));
+    });
+}
+
+function uiPrompt(title, hint, placeholder, defaultValue) {
+    return new Promise(resolve => {
+        const overlay = document.createElement('div');
+        overlay.className = 'popup-overlay';
+
+        const popup = document.createElement('div');
+        popup.className = 'popup';
+
+        const heading = document.createElement('h3');
+        heading.textContent = title;
+        popup.appendChild(heading);
+
+        if (hint) {
+            const hintElement = document.createElement('div');
+            hintElement.className = 'settings-label';
+            hintElement.textContent = hint;
+            popup.appendChild(hintElement);
+        }
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'settings-input';
+        input.placeholder = placeholder || '';
+        input.value = defaultValue || '';
+        popup.appendChild(input);
+
+        let settled = false;
+        const finish = value => {
+            if (settled) return;
+            settled = true;
+            overlay.classList.add('closing');
+            popup.classList.add('closing');
+            setTimeout(() => {
+                if (overlay.parentNode) document.body.removeChild(overlay);
+            }, 400);
+            resolve(value);
+        };
+
+        const buttons = document.createElement('div');
+        buttons.className = 'popup-buttons';
+
+        const cancelButton = document.createElement('button');
+        cancelButton.className = 'popup-cancel';
+        cancelButton.textContent = '取消';
+        cancelButton.addEventListener('click', () => finish(null));
+
+        const okButton = document.createElement('button');
+        okButton.className = 'popup-button frost-solid';
+        okButton.textContent = '确定';
+        okButton.addEventListener('click', () => finish(input.value));
+
+        buttons.appendChild(cancelButton);
+        buttons.appendChild(okButton);
+        popup.appendChild(buttons);
+
+        overlay.appendChild(popup);
+        overlay.addEventListener('click', event => {
+            if (event.target === overlay) finish(null);
+        });
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter') finish(input.value);
+        });
+
+        document.body.appendChild(overlay);
+        input.focus();
+    });
+}
+
+// 文件读写：桌面版由 desktop-bridge.js 覆盖成系统保存/打开对话框
+function saveTextFile(fileName, text) {
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+    return Promise.resolve();
+}
+
+function openTextFile() {
+    return new Promise(resolve => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.addEventListener('change', function () {
+            const file = input.files && input.files[0];
+            if (!file) {
+                resolve(null);
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => resolve(null);
+            reader.readAsText(file);
+        });
+        input.click();
+    });
 }
 
 function createConfirmPopup(titleText, message, onConfirm, onCancel) {

@@ -716,7 +716,7 @@ main {
     min-width: 300px;
 }
 
-.reset-all, .add-all, .subtract-all, .settings, .evaluate, .contribution-rank {
+.reset-all, .add-all, .subtract-all, .settings, .evaluate, .contribution-rank, .desktop-download {
     padding: 10px 20px;
     border: 1px solid var(--frost-edge);
     border-radius: var(--border-radius-md);
@@ -760,12 +760,19 @@ main {
     box-shadow: var(--frost-shadow-hover);
 }
 
-.settings {
+.settings, .desktop-download {
     background: #cbd5e1;
     color: #334155;
 }
 
-.settings:hover {
+/* 下载入口是 <a>，要自己抹掉下划线并对齐按钮基线 */
+a.desktop-download {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.settings:hover, .desktop-download:hover {
     filter: brightness(1.06);
     transform: translateY(-3px);
     box-shadow: var(--frost-shadow-hover);
@@ -793,7 +800,7 @@ main {
     box-shadow: var(--frost-shadow-hover);
 }
 
-.reset-all:active, .add-all:active, .subtract-all:active, .settings:active, .evaluate:active, .contribution-rank:active {
+.reset-all:active, .add-all:active, .subtract-all:active, .settings:active, .evaluate:active, .contribution-rank:active, .desktop-download:active {
     filter: none;
     transform: translateY(1px);
     box-shadow: var(--frost-shadow-press);
@@ -1048,7 +1055,7 @@ footer p {
         min-width: 100%;
     }
     
-    .reset-all, .add-all, .subtract-all, .settings, .evaluate {
+    .reset-all, .add-all, .subtract-all, .settings, .evaluate, .desktop-download {
         padding: 10px 16px;
         font-size: 0.85rem;
     }
@@ -1077,7 +1084,7 @@ footer p {
         gap: 8px;
     }
     
-    .reset-all, .add-all, .subtract-all, .settings, .evaluate, .contribution-rank {
+    .reset-all, .add-all, .subtract-all, .settings, .evaluate, .contribution-rank, .desktop-download {
         padding: 8px 14px;
         font-size: 0.8rem;
     }
