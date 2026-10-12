@@ -419,158 +419,6 @@ function toggleImpeccableMode() {
     return newMode;
 }
 
-// ---------- 悬浮球（桌面版）：配置与计分桥 ----------
-const WIDGET_SETTINGS_KEY = 'classScoreSystem_widget';
-
-// 悬浮球只发意图，所有写入集中在这里，避免两个窗口各存一份计分逻辑
-function initWidgetSettings() {
-    let saved = null;
-    try {
-        saved = JSON.parse(localStorage.getItem(WIDGET_SETTINGS_KEY));
-    } catch (error) {
-        saved = null;
-    }
-    const config = (saved && typeof saved === 'object') ? saved : {};
-    return {
-        enabled: config.enabled !== false,
-        subject: SUBJECTS.indexOf(config.subject) >= 0 ? config.subject : ''
-    };
-}
-
-function saveWidgetSettings(settings) {
-    localStorage.setItem(WIDGET_SETTINGS_KEY, JSON.stringify(settings));
-    emitToWidget('widget:config', settings);
-}
-
-function tauriEvent() {
-    return (window.__TAURI__ && window.__TAURI__.event) ? window.__TAURI__.event : null;
-}
-
-function emitToWidget(event, payload) {
-    const api = tauriEvent();
-    if (!api || !api.emitTo) return;
-    const result = api.emitTo('widget', event, payload);
-    if (result && result.catch) result.catch(() => {});
-}
-
-function subjectDataOf(subject) {
-    if (subjectStore && subjectStore.subjects && subjectStore.subjects[subject]) {
-        return subjectStore.subjects[subject];
-    }
-    return scoreData;
-}
-
-function widgetSnapshot() {
-    const settings = initWidgetSettings();
-    const subject = settings.subject || activeSubject;
-    const data = subjectDataOf(subject);
-    if (!data || !data.groups) return { subject: subject, groups: [], rules: [] };
-    return {
-        subject: subject,
-        groups: Object.keys(data.groups).map(function(key) {
-            return {
-                key: key,
-                name: getGroupName(data, key),
-                score: getGroupScore(data, key),
-                members: getGroupMembers(data, key).map(function(member) {
-                    return {
-                        id: member.id,
-                        name: getMemberDisplayName(member),
-                        contribution: getMemberContribution(member)
-                    };
-                })
-            };
-        }),
-        rules: getRules(data).map(function(rule) {
-            return { name: rule.name, value: Number(rule.value) || 0 };
-        })
-    };
-}
-
-// 悬浮球的规则带符号，正分加分、负分减分
-function applyWidgetScore(payload) {
-    const settings = initWidgetSettings();
-    const subject = settings.subject || activeSubject;
-    const data = subjectDataOf(subject);
-    const group = String(payload.group || '');
-    const delta = Number(payload.delta) || 0;
-
-    if (!data || !data.groups || !data.groups[group]) return { ok: false, message: '找不到该小组' };
-    if (delta === 0) return { ok: false, message: '这条规则分值是 0，未计分' };
-
-    const beforeScore = getGroupScore(data, group);
-    setGroupScore(data, group, beforeScore + delta);
-    const afterScore = getGroupScore(data, group);
-
-    const extra = { ruleName: typeof payload.ruleName === 'string' ? payload.ruleName : '' };
-    let type = delta > 0 ? 'add' : 'subtract';
-
-    if (payload.mode === 'member' && payload.memberId) {
-        const member = getGroupMembers(data, group).find(item => item.id === payload.memberId);
-        if (!member) return { ok: false, message: '找不到该成员' };
-        const beforeContribution = getMemberContribution(member);
-        setMemberContribution(member, beforeContribution + delta);
-        extra.memberId = member.id;
-        extra.memberName = getMemberDisplayName(member);
-        extra.beforeContribution = beforeContribution;
-        extra.afterContribution = getMemberContribution(member);
-        type = delta > 0 ? 'add-member' : 'subtract-member';
-    }
-
-    addHistoryRecord(data, type, group, beforeScore, afterScore, extra);
-    saveStore();
-
-    if (data === scoreData) {
-        updateGroupCardScore(group, afterScore, addFeedback);
-    }
-
-    const label = type === 'add-member' || type === 'subtract-member' ? extra.memberName : getGroupName(data, group);
-    const sign = delta > 0 ? `+${delta}` : `${delta}`;
-    const suffix = extra.ruleName ? ` · ${extra.ruleName}` : '';
-    return { ok: true, group: group, message: `${label} ${sign}${suffix}` };
-}
-
-function showMainWindow() {
-    const api = window.__TAURI__;
-    if (!api || !api.window) return;
-    const win = api.window.getCurrentWindow();
-    win.show();
-    win.setFocus();
-}
-
-function initWidgetBridge() {
-    const api = tauriEvent();
-    if (!api) return;
-
-    api.listen('widget:snapshot', function() {
-        emitToWidget('score:data', widgetSnapshot());
-    });
-
-    api.listen('widget:score', function(event) {
-        const result = applyWidgetScore(event.payload || {});
-        if (!result.ok) {
-            emitToWidget('score:error', { message: result.message });
-            return;
-        }
-        emitToWidget('score:done', { message: result.message, group: result.group });
-    });
-
-    api.listen('widget:open-main', showMainWindow);
-
-    // 托盘的「显示 / 隐藏悬浮球」只是改设置项的快捷方式，保证开关只有一个真源
-    api.listen('widget:toggle-from-tray', function() {
-        const settings = initWidgetSettings();
-        const next = !settings.enabled;
-        saveWidgetSettings({ enabled: next, subject: settings.subject });
-        const toggle = document.getElementById('widget-toggle');
-        if (toggle) toggle.checked = next;
-        const info = document.getElementById('widget-info-text');
-        if (info) info.textContent = next ? '悬浮球显示在桌面上' : '悬浮球已隐藏';
-    });
-
-    emitToWidget('score:data', widgetSnapshot());
-}
-
 // 获取设备性能描述
 function getPerformanceDescription() {
     if (!devicePerformanceInfo) return '未检测';
@@ -605,7 +453,7 @@ const VERSION_LOGS = [
         date: '2026-09-22',
         changes: [
             '【新增功能】新增语文、数学、英语三科切换，头部按钮一键切换，三科积分各自独立',
-            '【新增功能】三科共享小组数量与小组名字，修改时自动同步到各科；加分规则、成员、贡献与历史互不影响',
+            '【新增功能】三科共享小组数量、小组名字与成员名单，修改时自动同步到各科；加分规则、每人贡献与历史各科互不影响',
             '【数据兼容】数据结构升级为多学科容器，旧数据自动归入「语文」，云备份与导出/导入兼容新旧格式'
         ]
     },
@@ -1052,13 +900,13 @@ function createDefaultData() {
     };
 }
 
-// 迁移单个成员
-function migrateMember(raw, index) {
+// 迁移单个成员（id 规则与 createMember 保持一致，否则跨科按 id 匹配会撞车）
+function migrateMember(raw, index, group) {
     const member = (raw && typeof raw === 'object') ? raw : {};
     const row = parseInt(member.row, 10) || (index + 1);
     const col = parseInt(member.col, 10) || 1;
     return {
-        id: member.id || `m_${col}_${row}`,
+        id: member.id || `m_${group}_${row}`,
         name: typeof member.name === 'string' ? member.name : '',
         col: col,
         row: row,
@@ -1072,7 +920,7 @@ function migrateGroup(raw, index) {
         return {
             name: (typeof raw.name === 'string' && raw.name) ? raw.name : `小组 ${index}`,
             score: Number(raw.score) || 0,
-            members: Array.isArray(raw.members) ? raw.members.map((m, i) => migrateMember(m, i)) : []
+            members: Array.isArray(raw.members) ? raw.members.map((m, i) => migrateMember(m, i, index)) : []
         };
     }
     return {
@@ -1228,8 +1076,6 @@ function buildSubjectStore(raw) {
 // 整体保存学科容器到 localStorage
 function saveStore() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(subjectStore));
-    // 主窗口是唯一写入者，保存后顺手把最新快照推给悬浮球
-    emitToWidget('score:data', widgetSnapshot());
 }
 
 // 添加历史记录
@@ -2403,11 +2249,15 @@ function syncSharedAcrossSubjects() {
     if (!subjectStore || !subjectStore.subjects) return;
     const count = getGroupCount(scoreData);
     SUBJECTS.forEach(function(sub) {
-        syncGroupNameAndCountTo(subjectStore.subjects[sub], count);
+        const target = subjectStore.subjects[sub];
+        // 当前学科就是名单真源，重建它只会把成员对象换成新的，
+        // 让已经打开的成员弹窗里的引用失效
+        if (!target || target === scoreData) return;
+        syncGroupNameAndCountTo(target, count);
     });
 }
 
-// 把指定学科数据校正为给定组数，并复制共享的小组名字
+// 把组数、小组名字和成员名单同步到指定学科；分数与每人贡献保留该学科自己的一份
 function syncGroupNameAndCountTo(target, count) {
     const srcGroups = scoreData.groups || {};
     const targetGroups = {};
@@ -2417,13 +2267,33 @@ function syncGroupNameAndCountTo(target, count) {
         const base = createDefaultGroup(i);
         const group = existing || base;
         group.score = existing ? (Number(existing.score) || 0) : 0;
-        group.members = existing && Array.isArray(existing.members) ? existing.members : [];
         // 小组名字跟随当前学科
         group.name = (srcGroups[key] && srcGroups[key].name) ? srcGroups[key].name : base.name;
+        group.members = syncRoster(
+            srcGroups[key] && Array.isArray(srcGroups[key].members) ? srcGroups[key].members : [],
+            existing && Array.isArray(existing.members) ? existing.members : []
+        );
         targetGroups[key] = group;
     }
     target.groups = targetGroups;
     target.groupCount = count;
+}
+
+// 名单以来源学科为准逐条覆盖，同 id 的成员沿用该学科已有的贡献值
+function syncRoster(source, existingMembers) {
+    const contributions = {};
+    existingMembers.forEach(function (member) {
+        contributions[member.id] = Number(member.contribution) || 0;
+    });
+    return source.map(function (member) {
+        return {
+            id: member.id,
+            name: typeof member.name === 'string' ? member.name : '',
+            col: Number(member.col) || 1,
+            row: Number(member.row) || 1,
+            contribution: typeof contributions[member.id] === 'number' ? contributions[member.id] : 0
+        };
+    });
 }
 
 // 主函数
@@ -2457,7 +2327,6 @@ function init() {
     renderGroups(scoreData);
     loadDataToPage(scoreData);
     renderSubjectNav();
-    initWidgetBridge();
     
     // 使用事件委托优化事件监听器管理
     const scoreContainer = document.querySelector('.score-container');
@@ -2928,6 +2797,7 @@ function createMemberManagementPopup(scoreData, group, saveData, loadDataToPage)
 
         const apply = () => {
             setMemberCount(scoreData, group, newCount);
+            syncSharedAcrossSubjects();
             saveData(scoreData);
             renderMemberList();
             loadDataToPage(scoreData);
@@ -2961,9 +2831,10 @@ function createMemberManagementPopup(scoreData, group, saveData, loadDataToPage)
                 member.name = input.value.trim();
             }
         });
+        syncSharedAcrossSubjects();
         saveData(scoreData);
         renderMemberList();
-        showToast('✅ 成员名字已保存', 'success');
+        showToast('✅ 成员名字已保存到所有学科', 'success');
     });
     listSection.appendChild(saveNamesButton);
     popup.appendChild(listSection);
@@ -3686,117 +3557,6 @@ function createSettingsPopup(scoreData, saveData, loadDataToPage) {
     
     impeccableSection.appendChild(impeccableInfo);
     displayPanel.appendChild(impeccableSection);
-
-    // 悬浮球设置：只有桌面版（有 __TAURI__）才出现这一节
-    if (window.__TAURI__ && window.__TAURI__.core) {
-        const widgetSettings = initWidgetSettings();
-
-        const widgetSection = document.createElement('div');
-        widgetSection.className = 'performance-mode-section widget-mode-section';
-
-        const widgetTitle = document.createElement('h4');
-        widgetTitle.textContent = '悬浮计分球';
-        widgetSection.appendChild(widgetTitle);
-
-        const widgetInfo = document.createElement('div');
-        widgetInfo.className = 'performance-info';
-        const widgetInfoText = document.createElement('div');
-        widgetInfoText.id = 'widget-info-text';
-        widgetInfoText.textContent = widgetSettings.enabled ? '悬浮球显示在桌面上' : '悬浮球已隐藏';
-        widgetInfo.appendChild(widgetInfoText);
-
-        const writeWidgetSettings = function(enabled, subject) {
-            saveWidgetSettings({ enabled: enabled, subject: subject });
-            widgetInfoText.textContent = enabled ? '悬浮球显示在桌面上' : '悬浮球已隐藏';
-        };
-
-        const widgetToggleRow = document.createElement('div');
-        widgetToggleRow.className = 'performance-mode-toggle';
-        const widgetToggleLabel = document.createElement('label');
-        widgetToggleLabel.textContent = '显示悬浮球';
-        widgetToggleLabel.setAttribute('for', 'widget-toggle');
-        const widgetToggle = document.createElement('input');
-        widgetToggle.type = 'checkbox';
-        widgetToggle.id = 'widget-toggle';
-        widgetToggle.checked = widgetSettings.enabled;
-        widgetToggle.addEventListener('change', function() {
-            writeWidgetSettings(widgetToggle.checked, widgetSubjectSelect.value);
-        });
-        widgetToggleRow.appendChild(widgetToggleLabel);
-        widgetToggleRow.appendChild(widgetToggle);
-        widgetSection.appendChild(widgetToggleRow);
-
-        const widgetSubjectRow = document.createElement('div');
-        widgetSubjectRow.className = 'performance-mode-toggle';
-        const widgetSubjectLabel = document.createElement('label');
-        widgetSubjectLabel.textContent = '悬浮球计分学科';
-        widgetSubjectLabel.setAttribute('for', 'widget-subject');
-        const widgetSubjectSelect = document.createElement('select');
-        widgetSubjectSelect.className = 'widget-subject-select';
-        widgetSubjectSelect.id = 'widget-subject';
-        const followOption = document.createElement('option');
-        followOption.value = '';
-        followOption.textContent = '跟随主界面';
-        widgetSubjectSelect.appendChild(followOption);
-        SUBJECTS.forEach(function(subject) {
-            const option = document.createElement('option');
-            option.value = subject;
-            option.textContent = subject;
-            widgetSubjectSelect.appendChild(option);
-        });
-        widgetSubjectSelect.value = widgetSettings.subject;
-        widgetSubjectSelect.addEventListener('change', function() {
-            writeWidgetSettings(widgetToggle.checked, widgetSubjectSelect.value);
-            // 换了学科，快照要按新学科重推一次
-            emitToWidget('score:data', widgetSnapshot());
-        });
-        widgetSubjectRow.appendChild(widgetSubjectLabel);
-        widgetSubjectRow.appendChild(widgetSubjectSelect);
-        widgetSection.appendChild(widgetSubjectRow);
-
-        const autostartRow = document.createElement('div');
-        autostartRow.className = 'performance-mode-toggle';
-        const autostartLabel = document.createElement('label');
-        autostartLabel.textContent = '开机自动启动';
-        autostartLabel.setAttribute('for', 'widget-autostart');
-        const autostartToggle = document.createElement('input');
-        autostartToggle.type = 'checkbox';
-        autostartToggle.id = 'widget-autostart';
-        autostartToggle.addEventListener('change', function() {
-            const wanted = autostartToggle.checked;
-            window.__TAURI__.core.invoke('set_autostart', { enabled: wanted })
-                .then(function() {
-                    autostartInfoText.textContent = wanted ? '已加入开机启动项' : '已从开机启动项移除';
-                })
-                .catch(function(error) {
-                    autostartToggle.checked = !wanted;
-                    showToast(`设置开机自启失败：${error}`, 'error');
-                });
-        });
-        autostartRow.appendChild(autostartLabel);
-        autostartRow.appendChild(autostartToggle);
-        widgetSection.appendChild(autostartRow);
-
-        const autostartInfo = document.createElement('div');
-        autostartInfo.className = 'performance-info';
-        const autostartInfoText = document.createElement('div');
-        autostartInfoText.textContent = '正在读取开机启动状态…';
-        autostartInfo.appendChild(autostartInfoText);
-        widgetSection.appendChild(autostartInfo);
-
-        window.__TAURI__.core.invoke('get_autostart')
-            .then(function(enabled) {
-                autostartToggle.checked = Boolean(enabled);
-                autostartInfoText.textContent = enabled ? '已加入开机启动项' : '未加入开机启动项';
-            })
-            .catch(function() {
-                autostartRow.hidden = true;
-                autostartInfoText.textContent = '此系统不支持开机自启';
-            });
-
-        widgetSection.appendChild(widgetInfo);
-        displayPanel.appendChild(widgetSection);
-    }
 
     displayPanel.appendChild(displayButtonContainer);
     

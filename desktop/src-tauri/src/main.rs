@@ -22,6 +22,42 @@ fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|error| error.to_string())
 }
 
+/// NSWindowCollectionBehavior 里的两个标志位（Apple 头文件里的枚举常量值）
+const NS_CAN_JOIN_ALL_SPACES: isize = 1 << 0;
+const NS_FULL_SCREEN_AUXILIARY: isize = 1 << 8;
+
+/// macOS 上别的全屏 App 占据独立 Space，缺 FullScreenAuxiliary 就进不去那个 Space，
+/// 球会被 PPT/希沃的全屏盖住。tao 的 set_visible_on_all_workspaces 只设了
+/// CanJoinAllSpaces（tao-0.37.1 macos/window.rs:1537），所以这里补上另一个。
+#[cfg(target_os = "macos")]
+fn make_ball_float_above_fullscreen(app: &AppHandle) {
+    let Some(widget) = app.get_webview_window("widget") else {
+        return;
+    };
+
+    let result = widget.with_webview(move |platform| {
+        use objc2::msg_send;
+        use objc2::runtime::AnyObject;
+
+        unsafe {
+            let ns_window = platform.ns_window() as *mut AnyObject;
+            if ns_window.is_null() {
+                return;
+            }
+            let current: isize = msg_send![ns_window, collectionBehavior];
+            let next = current | NS_CAN_JOIN_ALL_SPACES | NS_FULL_SCREEN_AUXILIARY;
+            let _: () = msg_send![ns_window, setCollectionBehavior: next];
+        }
+    });
+
+    if let Err(error) = result {
+        eprintln!("悬浮球全屏覆盖标志位设置失败: {error}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn make_ball_float_above_fullscreen(_app: &AppHandle) {}
+
 fn show_main(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
@@ -94,6 +130,8 @@ fn main() {
                     _ => {}
                 })
                 .build(app)?;
+
+            make_ball_float_above_fullscreen(&app.handle());
 
             Ok(())
         })

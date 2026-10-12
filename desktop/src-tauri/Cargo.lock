@@ -496,6 +496,7 @@ dependencies = [
 name = "class-score-desktop"
 version = "1.8.0"
 dependencies = [
+ "objc2",
  "tauri",
  "tauri-build",
  "tauri-plugin-autostart",

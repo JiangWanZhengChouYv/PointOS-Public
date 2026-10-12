@@ -5,7 +5,7 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 app_name="班级积分管理系统.app"
-src="$root/src-tauri/target/release/bundle/macos/$app_name"
+src="$root/desktop/src-tauri/target/release/bundle/macos/$app_name"
 dest="/Applications/$app_name"
 login_item="$HOME/Library/LaunchAgents/班级积分管理系统.plist"
 marker="$HOME/Library/Application Support/com.classscoresystem.desktop/.autostart-default"

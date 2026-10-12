@@ -7,9 +7,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-b64=$(sed -n 's/.*base64,\([A-Za-z0-9+/=]*\)".*/\1/p' "$root/index.html" | head -1)
+b64=$(sed -n 's/.*base64,\([A-Za-z0-9+/=]*\)".*/\1/p' "$root/web/index.html" | head -1)
 if [ -z "$b64" ]; then
-  echo "index.html 里找不到 base64 内嵌 favicon" >&2
+  echo "web/index.html 里找不到 base64 内嵌 favicon" >&2
   exit 1
 fi
 printf '%s' "$b64" | base64 -d > "$tmp/app-icon.svg"
@@ -32,12 +32,12 @@ if [ ! -f "$src" ]; then
   exit 1
 fi
 
-# tauri icon 的默认输出目录相对于当前工作目录，先固定到仓库根
-cd "$root"
+# tauri icon 的默认输出目录相对于当前工作目录，先固定到 desktop/
+cd "$root/desktop"
 cargo tauri icon "$src"
 
 # 桌面版只用到桌面图标，移动端产物删掉避免污染仓库
-rm -rf "$root/src-tauri/icons/android" "$root/src-tauri/icons/ios"
+rm -rf "$root/desktop/src-tauri/icons/android" "$root/desktop/src-tauri/icons/ios"
 
 echo "图标已生成:"
-ls -1 "$root/src-tauri/icons"
+ls -1 "$root/desktop/src-tauri/icons"

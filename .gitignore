@@ -4,6 +4,6 @@ Electron/node_modules/
 Electron/dist/
 
 # Tauri 桌面版
-/desktop-dist/
-/src-tauri/target/
-/src-tauri/gen/schemas/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/schemas/
