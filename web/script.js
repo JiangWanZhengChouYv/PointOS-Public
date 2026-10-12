@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.8.0
+// 版本: 1.8.1
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,7 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.8.0';
+const CURRENT_VERSION = '1.8.1';
 
 // 桌面版安装包统一从最新 Release 拿
 const RELEASES_URL = 'https://github.com/JiangWanZhengChouYv/PointOS-Public/releases/latest';
@@ -440,6 +440,20 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.8.1',
+        date: '2026-10-12',
+        changes: [
+            '【新增功能】Tauri 桌面版：常驻悬浮计分球，点按展开小组/个人计分，加减分规则同屏显示，关掉主窗口仍然常驻',
+            '【新增功能】系统托盘菜单（打开主界面 / 切换悬浮球 / 退出）与开机自动启动',
+            '【新增功能】桌面版从 JSDelivr 自动核查更新；网页版右上角与设置→关于新增「下载桌面版」入口',
+            '【功能优化】小组成员名单改为三科共享（每人贡献与历史仍各科独立），改人数或名字自动同步到三科',
+            '【功能优化】确认框与 Token 输入改为应用内对话框，导出/导入改用系统文件对话框，macOS 桌面版不再静默失效',
+            '【缺陷修复】悬浮球在 Windows 上点不动（原生拖拽吃掉了点击事件）、隐藏后又自动出现',
+            '【界面优化】应用图标去掉白底，悬浮球圆角与投影重做',
+            '【架构调整】仓库拆成 web/ 与 desktop/ 两套产物，计分与数据逻辑保持单一真源'
+        ]
+    },
     {
         version: '1.8.0',
         date: '2026-09-22',

@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "class-score-desktop"
-version = "1.8.0"
+version = "1.8.1"
 dependencies = [
  "objc2",
  "tauri",
