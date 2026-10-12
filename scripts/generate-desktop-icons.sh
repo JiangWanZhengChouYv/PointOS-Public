@@ -7,9 +7,9 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
-b64=$(sed -n 's/.*base64,\([A-Za-z0-9+/=]*\)".*/\1/p' "$root/web/index.html" | head -1)
+b64=$(sed -n 's/.*base64,\([A-Za-z0-9+/=]*\)".*/\1/p' "$root/docs/index.html" | head -1)
 if [ -z "$b64" ]; then
-  echo "web/index.html 里找不到 base64 内嵌 favicon" >&2
+  echo "docs/index.html 里找不到 base64 内嵌 favicon" >&2
   exit 1
 fi
 printf '%s' "$b64" | base64 -d > "$tmp/app-icon.svg"

@@ -2,7 +2,7 @@
   'use strict';
 
   // 桌面专属层：网页版没有 window.__TAURI__，整个文件直接空转。
-  // 这里只调用 web/script.js 暴露的全局函数与全局绑定，不反向修改共享代码。
+  // 这里只调用 docs/script.js 暴露的全局函数与全局绑定，不反向修改共享代码。
   const T = window.__TAURI__;
   if (!T || !T.event) return;
 
@@ -265,7 +265,7 @@
     panel.appendChild(section);
   }
 
-  const VERSION_URL = 'https://cdn.jsdelivr.net/gh/JiangWanZhengChouYv/PointOS-Public@main/web/version.json';
+  const VERSION_URL = 'https://cdn.jsdelivr.net/gh/JiangWanZhengChouYv/PointOS-Public@main/docs/version.json';
 
   function isNewer(remote, local) {
     const a = String(remote).split('.').map(n => parseInt(n, 10) || 0);

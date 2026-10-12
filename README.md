@@ -20,20 +20,20 @@
 - **前端**：HTML5, CSS3, JavaScript (ES6+)
 - **存储**：LocalStorage
 - **性能优化**：Service Worker, 资源压缩, 图片懒加载
-- **部署**：GitHub Pages（发布源为仓库的 `web/` 目录）
+- **部署**：GitHub Pages（发布源为仓库的 `docs/` 目录；Pages 的分支源只认 `/` 和 `/docs`）
 - **桌面版**：Tauri 2（Windows / macOS），带常驻悬浮计分球与系统托盘
 
 ## 目录结构与构建
 
 ```
-web/       网页版，GitHub Pages 直接发布这个目录
+docs/       网页版，GitHub Pages 直接发布这个目录
 desktop/   桌面版
   src/         悬浮球与桌面专属脚本（widget.*、desktop-shim.js、desktop-bridge.js）
   dist/        构建产物（生成，勿手改）
   src-tauri/   Rust 工程
 ```
 
-计分与数据逻辑只有 `web/script.js` 一份：桌面构建把 `web/` 的未压缩源文件和
+计分与数据逻辑只有 `docs/script.js` 一份：桌面构建把 `docs/` 的未压缩源文件和
 `desktop/src/` 拼到 `desktop/dist/`，桌面专属能力（悬浮球、开机自启、系统文件
 对话框、外链交给浏览器）全部写在 `desktop-bridge.js` 里，靠包一层
 `window.saveStore` / `window.createSettingsPopup` 接管，不反向改共享代码。
@@ -42,7 +42,7 @@ desktop/   桌面版
 sh scripts/prepare-desktop-dist.sh            # 生成 desktop/dist
 (cd desktop/src-tauri && cargo tauri build)   # 需要 rust 与 cargo install tauri-cli
 sh scripts/install-desktop-app.sh             # 装到 /Applications 并重注册开机自启
-sh scripts/build-min.sh                       # 改了 web/ 源码后重新生成 .min
+sh scripts/build-min.sh                       # 改了 docs/ 源码后重新生成 .min
 sh scripts/generate-desktop-icons.sh          # 从 favicon 重新生成应用图标
 ```
 
