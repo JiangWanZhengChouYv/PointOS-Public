@@ -1,12 +1,15 @@
 #!/bin/sh
-# 桌面版前端产物：直接复用线上已压缩文件，本仓库不需要 node/打包器。
-# service-worker.js 故意不拷入 —— WebView 里注册失败会被 script.js 自己的 catch 吞掉。
+# 桌面版前端产物。本仓库没有 node 也没有压缩器，所以桌面版直接吃未压缩源文件：
+# 改 script.js / widget.js 后立刻能在桌面端验证，不需要先重压缩。
+# 网页版仍然用 .min 产物，两者互不影响。
+#
+# service-worker.js 故意不打包 —— WebView 里注册失败会被 script.js 自己的 catch 吞掉。
 set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 out="$root/desktop-dist"
 
-assets="index.html style.min.css script.min.js performance-test.js version.json"
+assets="index.html style.css script.js widget.html widget.css widget.js performance-test.js version.json"
 
 for f in $assets; do
   if [ ! -f "$root/$f" ]; then
@@ -20,6 +23,16 @@ mkdir -p "$out"
 for f in $assets; do
   cp "$root/$f" "$out/$f"
 done
+
+# 把网页版的 .min 引用改回未压缩文件
+sed -e 's#href="style\.min\.css#href="style.css#' \
+    -e 's#src="script\.min\.js#src="script.js#' \
+    "$out/index.html" > "$out/index.html.tmp" && mv "$out/index.html.tmp" "$out/index.html"
+
+if ! grep -q 'href="style.css?v=' "$out/index.html" || ! grep -q 'src="script.js?v=' "$out/index.html"; then
+  echo "引用重写失败：index.html 里找不到 style.min.css / script.min.js 的引用" >&2
+  exit 1
+fi
 
 # WKWebView 没有实现 JS 弹窗代理（wry 0.57 未实现 WKUIDelegate 的
 # runJavaScript{Alert,Confirm,TextInput}Panel），alert/confirm/prompt 会静默失效。
@@ -48,12 +61,12 @@ cat > "$out/desktop-shim.js" <<'JS'
 })();
 JS
 
-sed 's#<script src="script.min.js?v=[^"]*" defer></script>#&\n  <script src="desktop-shim.js" defer></script>#' \
+sed 's#<script src="script.js?v=[^"]*" defer></script>#&\n  <script src="desktop-shim.js" defer></script>#' \
   "$out/index.html" > "$out/index.html.tmp" && mv "$out/index.html.tmp" "$out/index.html"
 
 # 版本号一变 sed 就会静默不匹配，这里必须失败退出
 if ! grep -q 'desktop-shim.js' "$out/index.html"; then
-  echo "垫片注入失败：index.html 里找不到 script.min.js 的 defer 标签" >&2
+  echo "垫片注入失败：index.html 里找不到 script.js 的 defer 标签" >&2
   exit 1
 fi
 

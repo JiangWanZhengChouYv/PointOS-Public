@@ -1,0 +1,329 @@
+/* 悬浮计分球：独立于主界面样式表，只共用同一套色值 */
+
+:root {
+    --ball-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --surface: #ffffff;
+    --surface-alt: #f5f7ff;
+    --ink: #1f2937;
+    --muted: #5b6472;
+    --line: #e3e7f0;
+    --accent: #4f46e5;
+    --accent-soft: #eef0ff;
+    --ok: #047857;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* ---------- 收起态：64x64 方球 ---------- */
+
+.ball {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    /* 圆角只在这一处定义：SVG 画满幅方形，由容器裁成圆角，避免两层半径套出方角 */
+    border-radius: 20px;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow:
+        0 0 0 1px rgba(76, 60, 130, 0.10),
+        0 8px 22px rgba(76, 60, 130, 0.20),
+        0 1px 3px rgba(76, 60, 130, 0.14);
+    transition: transform 120ms ease-out;
+}
+
+.ball:hover {
+    transform: scale(1.04);
+}
+
+.ball:focus-visible {
+    outline: 2px solid #ffffff;
+    outline-offset: -4px;
+}
+
+.ball-art {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.ball-subject {
+    position: absolute;
+    right: 3px;
+    bottom: 2px;
+    min-width: 18px;
+    padding: 1px 4px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+
+body[data-state="expanded"] .ball {
+    display: none;
+}
+
+/* ---------- 展开态：320x520 面板 ---------- */
+
+.panel {
+    display: flex;
+    flex-direction: column;
+    width: 320px;
+    height: 520px;
+    box-sizing: border-box;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(31, 25, 60, 0.24);
+    overflow: hidden;
+}
+
+body[data-state="collapsed"] .panel {
+    display: none;
+}
+
+.panel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 10px 10px 12px;
+    background: var(--ball-gradient);
+    color: #ffffff;
+    cursor: grab;
+}
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    padding: 3px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.tab {
+    padding: 4px 12px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #ffffff;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tab.is-active {
+    background: #ffffff;
+    color: var(--accent);
+}
+
+.panel-subject {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    opacity: 0.95;
+}
+
+.icon-btn {
+    width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.34);
+}
+
+.feedback {
+    margin: 0;
+    padding: 8px 12px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.feedback[data-tone="error"] {
+    background: #fff1f1;
+    color: #b42318;
+}
+
+.crumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-alt);
+}
+
+.crumb-back {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+}
+
+.crumb-target {
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- 列表 ---------- */
+
+.list {
+    flex: 1 1 auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    overflow-y: auto;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0 0 4px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.row:hover {
+    background: var(--surface-alt);
+    border-color: var(--line);
+}
+
+.row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
+.row-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row-score {
+    font-size: 15px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--accent);
+}
+
+.row-value {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #e7f7ef;
+    color: var(--ok);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.row-value.is-minus {
+    background: #fdecec;
+    color: #b42318;
+}
+
+.row[data-flash="on"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+}
+
+.list-note {
+    margin: 0;
+    padding: 18px 14px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: center;
+}
+
+.panel-foot {
+    padding: 8px 10px;
+    border-top: 1px solid var(--line);
+    background: var(--surface-alt);
+}
+
+.ghost-btn {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ghost-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+body[data-state="no-tauri"] .ball {
+    display: none;
+}
+
+body[data-state="no-tauri"]::before {
+    content: "悬浮球只在桌面版可用";
+    display: block;
+    padding: 8px;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ball,
+    .row,
+    .tab {
+        transition: none;
+    }
+
+    .ball:hover {
+        transform: none;
+    }
+}

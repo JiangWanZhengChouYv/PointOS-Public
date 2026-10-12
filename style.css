@@ -1823,6 +1823,22 @@ footer p {
     border-color: rgba(99, 102, 241, 0.35);
 }
 
+/* 悬浮球设置里的学科下拉，跟在开关同一行 */
+.widget-subject-select {
+    flex: 0 0 132px;
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.widget-subject-select:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 body.impeccable-mode {
     --impeccable-surface: rgba(255, 255, 255, 0.72);
     --impeccable-stroke: rgba(255, 255, 255, 0.7);

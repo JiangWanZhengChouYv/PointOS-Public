@@ -7,6 +7,7 @@
     "frontendDist": "../desktop-dist"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "label": "main",
@@ -18,7 +19,30 @@
         "minHeight": 640,
         "center": true,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "visible": false
+      },
+      {
+        "label": "widget",
+        "title": "悬浮计分球",
+        "url": "widget.html",
+        "width": 64,
+        "height": 64,
+        "minWidth": 64,
+        "minHeight": 64,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false,
+        "visibleOnAllWorkspaces": true,
+        "acceptFirstMouse": true,
+        "focus": true,
+        "visible": true
       }
     ],
     "security": {
@@ -30,7 +54,7 @@
     "targets": "all",
     "category": "Education",
     "shortDescription": "班级小组积分管理",
-    "longDescription": "面向教室大屏的班级小组积分管理桌面应用，支持加减分、评比、贡献榜、成员历史和 JSON 数据备份。",
+    "longDescription": "面向教室大屏的班级小组积分管理桌面应用，支持加减分、评比、贡献榜、成员历史、JSON 数据备份和常驻悬浮计分球。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

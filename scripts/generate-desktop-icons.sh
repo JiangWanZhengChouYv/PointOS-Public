@@ -19,9 +19,14 @@ if ! command -v cargo >/dev/null 2>&1; then
   exit 1
 fi
 
-# macOS 自带 QuickLook 负责 SVG 光栅化，无需 node / rsvg / imagemagick
-qlmanage -t -s 1024 -o "$tmp" "$tmp/app-icon.svg" >/dev/null 2>&1
-src="$tmp/app-icon.svg.png"
+if ! command -v xcrun >/dev/null 2>&1; then
+  echo "需要 xcrun（Xcode 命令行工具）来光栅化 SVG" >&2
+  exit 1
+fi
+
+# 用 NSImage 光栅化，保留透明通道；qlmanage 会合成到白底，烤出白边框
+xcrun swift "$root/scripts/svg-to-png.swift" "$tmp/app-icon.svg" "$tmp/app-icon.png" 1024
+src="$tmp/app-icon.png"
 if [ ! -f "$src" ]; then
   echo "SVG 光栅化失败，没有生成 1024x1024 源图" >&2
   exit 1
