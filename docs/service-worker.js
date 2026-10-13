@@ -1,11 +1,14 @@
 // Service Worker for 班级积分管理系统
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `class-score-system-${CACHE_VERSION}`;
+// 本 SW 对应的那一版资源号：script.js 只在这个号比它自己的 CURRENT_VERSION 新时才提示刷新，
+// 不然首访装 SW 也会弹一次"发现新版本"
+const SW_VERSION = '1.8.2';
 // 路径需带 ?v= 与 index.html 中的实际引用保持一致，离线时才可命中缓存
 const ASSETS_TO_CACHE = [
   'index.html',
-  'style.min.css?v=1.8.1',
-  'script.min.js?v=1.8.1'
+  'style.min.css?v=1.8.2',
+  'script.min.js?v=1.8.2'
 ];
 
 // 安装Service Worker
@@ -22,6 +25,7 @@ self.addEventListener('install', (event) => {
           clients.forEach((client) => {
             client.postMessage({ 
               type: 'SW_UPDATED',
+              version: SW_VERSION,
               message: '新版本已就绪，请刷新页面以使用最新版本'
             });
           });

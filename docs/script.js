@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.8.1
+// 版本: 1.8.2
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,7 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.8.1';
+const CURRENT_VERSION = '1.8.2';
 
 // 桌面版安装包统一从最新 Release 拿
 const RELEASES_URL = 'https://github.com/JiangWanZhengChouYv/PointOS-Public/releases/latest';
@@ -440,6 +440,17 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.8.2',
+        date: '2026-10-13',
+        changes: [
+            '【新增功能】桌面版内置自动更新：启动时静默核查签名清单，确认后下载并自动重启完成安装；设置→显示新增「检查更新」',
+            '【缺陷修复】网页版「发现新版本」提示条关不掉 —— 改为与本机代码版本比较，同一版本提示过就不再出现',
+            '【缺陷修复】首次访问即弹提示条、文案里出现 undefined —— Service Worker 广播补上版本号，四条路径走同一门控',
+            '【界面优化】悬浮球与展开面板去掉被窗口边界裁掉的投影，纯白背景下左下/右下角不再残留浅灰',
+            '【功能优化】桌面版移除「下载桌面版」入口，软件自己会更新',
+        ]
+    },
     {
         version: '1.8.1',
         date: '2026-10-12',
@@ -2126,99 +2137,9 @@ if ('serviceWorker' in navigator) {
         if (event.data && event.data.type === 'SW_UPDATED') {
             console.log('Service Worker 已更新:', event.data.message);
             // 显示更新提示弹窗
-            showUpdateNotification(event.data.message);
+            showUpdateNotification(event.data.version, CURRENT_VERSION);
         }
     });
-}
-
-// 显示更新提示弹窗
-function showUpdateNotification(message) {
-    // 检查是否已经显示过更新提示
-    if (document.getElementById('update-notification')) {
-        return;
-    }
-    
-    const notification = document.createElement('div');
-    notification.id = 'update-notification';
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        z-index: 10000;
-        max-width: 350px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        animation: slideIn 0.3s ease-out;
-    `;
-    
-    const title = document.createElement('h4');
-    title.textContent = '🎉 发现新版本';
-    title.style.cssText = 'margin: 0 0 10px 0; font-size: 18px; font-weight: 600;';
-    
-    const content = document.createElement('p');
-    content.textContent = message || '系统有新版本可用，建议立即更新以获得最佳体验。';
-    content.style.cssText = 'margin: 0 0 15px 0; font-size: 14px; line-height: 1.5; opacity: 0.95;';
-    
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; gap: 10px;';
-    
-    const updateButton = document.createElement('button');
-    updateButton.textContent = '立即更新';
-    updateButton.className = 'notify-btn notify-btn-primary';
-    updateButton.onclick = () => {
-        window.location.reload();
-    };
-    
-    const laterButton = document.createElement('button');
-    laterButton.textContent = '稍后更新';
-    laterButton.className = 'notify-btn notify-btn-ghost';
-    laterButton.onclick = () => {
-        notification.style.animation = 'slideOut 0.3s ease-in forwards';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    };
-    
-    buttonContainer.appendChild(updateButton);
-    buttonContainer.appendChild(laterButton);
-    
-    notification.appendChild(title);
-    notification.appendChild(content);
-    notification.appendChild(buttonContainer);
-    
-    // 添加动画样式
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
-        @keyframes slideOut {
-            from {
-                transform: translateX(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-    
-    document.body.appendChild(notification);
 }
 
 // 渲染头部学科导航按钮
@@ -4231,13 +4152,31 @@ function evaluateScore(scoreData, saveData, loadDataToPage, addFeedback) {
     }
 }
 
-// 版本号存储键名
-const VERSION_STORAGE_KEY = 'classScoreSystem_version';
-const UPDATE_DEFERRED_KEY = 'classScoreSystem_updateDeferred';
-
-// 当前版本号
-let currentAppVersion = '1.2.3';
+// 「这个版本已经提示过了」的标记：靠它才不会同一版本反复弹
+const UPDATE_SEEN_KEY = 'classScoreSystem_updateSeen';
 let updateNotificationShown = false;
+let pendingUpdateVersion = null;
+
+// 点分数字比较，容忍前导 v 和段数不齐
+function isNewerVersion(remote, local) {
+    const a = String(remote || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    const b = String(local || '').replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        const x = a[i] || 0;
+        const y = b[i] || 0;
+        if (x !== y) return x > y;
+    }
+    return false;
+}
+
+// 只认一个事实：线上版本比当前跑着的这份代码（打进 bundle 的 CURRENT_VERSION）新，
+// 而且这一版还没提示过。以前拿 localStorage 里的旧版本号当基准，那个值只在缺失时
+// 写一次、之后永不前进，于是 reload 完依旧"有更新"，提示条根本关不掉。
+function hasNewerVersion(version) {
+    if (!version) return false;
+    if (!isNewerVersion(version, CURRENT_VERSION)) return false;
+    return localStorage.getItem(UPDATE_SEEN_KEY) !== String(version);
+}
 
 // 检查版本更新
 async function checkVersionUpdate() {
@@ -4247,19 +4186,8 @@ async function checkVersionUpdate() {
         
         const data = await response.json();
         const serverVersion = data.version;
-        const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
         
-        // 保存当前版本号
-        if (!storedVersion) {
-            localStorage.setItem(VERSION_STORAGE_KEY, serverVersion);
-            return;
-        }
-        
-        // 比较版本号
-        if (serverVersion !== storedVersion && !updateNotificationShown) {
-            updateNotificationShown = true;
-            showUpdateNotification(serverVersion, storedVersion);
-        }
+        showUpdateNotification(serverVersion, CURRENT_VERSION);
     } catch (error) {
         console.error('Version check failed:', error);
     }
@@ -4267,15 +4195,12 @@ async function checkVersionUpdate() {
 
 // 显示版本更新提示
 function showUpdateNotification(newVersion, currentVersion) {
-    // 检查用户是否选择稍后更新
-    const deferred = localStorage.getItem(UPDATE_DEFERRED_KEY);
-    if (deferred) {
-        const deferredTime = parseInt(deferred);
-        // 如果用户在1小时内选择过稍后更新，不再提示
-        if (Date.now() - deferredTime < 60 * 60 * 1000) {
-            return;
-        }
-    }
+    // 四条触发路径（轮询、SW_UPDATED、updatefound、VERSION_UPDATED）都从这里出，
+    // 门控只写这一处：版本不比本机新、或这一版已经提示过，就彻底不出现
+    if (updateNotificationShown || !hasNewerVersion(newVersion)) return;
+    if (document.getElementById('update-notification-bar')) return;
+    updateNotificationShown = true;
+    pendingUpdateVersion = String(newVersion);
     
     // 创建更新提示条
     const updateBar = document.createElement('div');
@@ -4374,19 +4299,22 @@ function handleUpdateNow() {
                 cacheNames.map(cacheName => caches.delete(cacheName))
             );
         }).then(() => {
-            localStorage.removeItem(UPDATE_DEFERRED_KEY);
+            localStorage.removeItem(UPDATE_SEEN_KEY);
             window.location.reload(true);
         });
     } else {
-        localStorage.removeItem(UPDATE_DEFERRED_KEY);
+        localStorage.removeItem(UPDATE_SEEN_KEY);
         window.location.reload(true);
     }
 }
 
 // 处理稍后更新
 function handleUpdateLater() {
-    // 记录用户选择稍后更新的时间
-    localStorage.setItem(UPDATE_DEFERRED_KEY, Date.now().toString());
+    // 记住"这一版已经告诉过用户了"，同一个版本不再弹；
+    // 线上出现更高的版本时才会再提示
+    if (pendingUpdateVersion) {
+        localStorage.setItem(UPDATE_SEEN_KEY, pendingUpdateVersion);
+    }
     
     // 隐藏提示条
     const updateBar = document.getElementById('update-notification-bar');
@@ -4420,19 +4348,9 @@ if ('serviceWorker' in navigator) {
                                             // 新版本的 Service Worker 已安装，等待用户确认
                                             console.log('New Service Worker installed, waiting for user confirmation');
                                             
-                                            // 获取新版本号
-                                            fetch('version.json', { cache: 'no-store' })
-                                                .then(response => response.json())
-                                                .then(data => {
-                                                    const newVersion = data.version;
-                                                    const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
-                                                    
-                                                    if (newVersion !== storedVersion && !updateNotificationShown) {
-                                                        updateNotificationShown = true;
-                                                        showUpdateNotification(newVersion, storedVersion || '未知');
-                                                    }
-                                                })
-                                                .catch(err => console.error('Failed to get version:', err));
+                                            // 新 SW 装好了说明线上确实有更新的资源，
+                                            // 直接走同一个核查入口，别再写一套比较逻辑
+                                            checkVersionUpdate();
                                         }
                                     } catch (error) {
                                         console.error('Service Worker statechange error:', error);
@@ -4457,12 +4375,7 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', (event) => {
             if (event.data && event.data.type === 'VERSION_UPDATED') {
                 console.log('Version updated to:', event.data.version);
-                const storedVersion = localStorage.getItem(VERSION_STORAGE_KEY);
-                
-                if (event.data.version !== storedVersion && !updateNotificationShown) {
-                    updateNotificationShown = true;
-                    showUpdateNotification(event.data.version, storedVersion || '未知');
-                }
+                showUpdateNotification(event.data.version, CURRENT_VERSION);
             }
             
             if (event.data && event.data.type === 'CACHE_UPDATED') {
