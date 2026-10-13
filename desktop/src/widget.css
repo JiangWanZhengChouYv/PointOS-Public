@@ -30,19 +30,24 @@ body {
     position: relative;
     width: 64px;
     height: 64px;
+    box-sizing: border-box;
     /* 圆角只在这一处定义：SVG 画满幅方形，由容器裁成圆角，避免两层半径套出方角 */
     border-radius: 20px;
+    /* 窗口正好 64x64，任何外阴影都会被窗口边界裁掉，向下偏移那一截只剩
+       圆角留下的两个透明角里有灰 —— 所以边缘只画一条压在内部的描边 */
+    border: 1px solid rgba(255, 255, 255, 0.22);
     overflow: hidden;
     cursor: pointer;
-    box-shadow:
-        0 0 0 1px rgba(76, 60, 130, 0.10),
-        0 8px 22px rgba(76, 60, 130, 0.20),
-        0 1px 3px rgba(76, 60, 130, 0.14);
-    transition: transform 120ms ease-out;
+    transition: filter 120ms ease-out, transform 120ms ease-out;
 }
 
+/* 放大只会超出窗口被裁边，高亮和向内缩都留在窗口内 */
 .ball:hover {
-    transform: scale(1.04);
+    filter: brightness(1.06);
+}
+
+.ball:active {
+    transform: scale(0.96);
 }
 
 .ball:focus-visible {
@@ -86,7 +91,7 @@ body[data-state="expanded"] .ball {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(31, 25, 60, 0.24);
+    /* 同上：展开时窗口就是 320x520，外阴影只会在两个下角留下印子 */
     overflow: hidden;
 }
 
