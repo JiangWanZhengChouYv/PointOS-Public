@@ -54,33 +54,45 @@ for f in "$mac_bundle" "$mac_sig" "$mac_dmg" "$win_exe" "$win_sig"; do
   fi
 done
 
-# 插件解包时会丢掉压缩包第一层路径，所以根目录必须正好是那个 .app
-mac_app_name=$(basename "$mac_bundle" | sed -E 's/\.app\.tar\.gz$//')
-tar -tzf "$mac_bundle" | head -3 | grep -q "^${mac_app_name}\.app/" || {
-  echo ".app.tar.gz 结构不对：根目录应该是 $mac_app_name.app/" >&2
-  tar -tzf "$mac_bundle" | head -5 >&2
-  exit 1
-}
+# 插件解包时会丢掉压缩包第一层路径，所以根目录必须正好是一个 .app/ 目录
+tar_root=$(tar -tzf "$mac_bundle" | head -1)
+case "$tar_root" in
+  *.app/) echo "tar 根层 OK：$tar_root" ;;
+  *) echo ".app.tar.gz 结构不对，第一层应该是个 .app/ 目录，实际是：$tar_root" >&2
+     tar -tzf "$mac_bundle" | head -5 >&2
+     exit 1 ;;
+esac
+
+# GitHub 会把资产名里的中文削掉（实测：班级积分探针.app.tar.gz 登记成 app.tar.gz，
+# 现有 v1.8.1 的资产也已经是 _1.8.1_x64-setup.exe），而清单里的下载 URL 必须和登记名
+# 一字不差，所以统一按 ASCII 名再传一份。
+assets="$work/assets"
+mkdir -p "$assets"
+base="class-score-system_${version}"
+cp "$mac_bundle" "$assets/${base}_aarch64.app.tar.gz"
+cp "$mac_sig" "$assets/${base}_aarch64.app.tar.gz.sig"
+cp "$win_exe" "$assets/${base}_x64-setup.exe"
+cp "$win_sig" "$assets/${base}_x64-setup.exe.sig"
+cp "$mac_dmg" "$assets/${base}_aarch64.dmg"
 
 pub_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 python3 "$root/scripts/make-updater-manifest.py" \
   --version "$version" --tag "$tag" --repo "$owner_repo" --pub-date "$pub_date" \
-  --mac-artifact "$mac_bundle" --mac-sig "$mac_sig" \
-  --win-artifact "$win_exe" --win-sig "$win_sig" \
+  --mac-artifact "$assets/${base}_aarch64.app.tar.gz" --mac-sig "$assets/${base}_aarch64.app.tar.gz.sig" \
+  --win-artifact "$assets/${base}_x64-setup.exe" --win-sig "$assets/${base}_x64-setup.exe.sig" \
   --out "$work/latest.json"
 
-
 echo "== 要上传的资产 =="
-ls -1 "$work/mac" "$work/win" "$work/latest.json"
+ls -1 "$assets" "$work/latest.json"
 
 if ! gh release view "$tag" --repo "$owner_repo" >/dev/null 2>&1; then
   gh release create "$tag" --repo "$owner_repo" --title "v$version" \
     --notes "班级积分管理系统 v$version（更新内容见应用内「版本日志」）"
 fi
 
-# 逐个上传：glob 展开，文件名带空格或中文都不会被拆坏
-for f in "$work/mac"/* "$work/win"/* "$work/latest.json"; do
+# 逐个上传：glob 展开，文件名带空格也不会被拆坏
+for f in "$assets"/* "$work/latest.json"; do
   [ -f "$f" ] || continue
   gh release upload "$tag" "$f" --repo "$owner_repo" --clobber
 done
