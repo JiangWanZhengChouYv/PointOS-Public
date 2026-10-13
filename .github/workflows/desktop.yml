@@ -45,6 +45,10 @@ jobs:
       - name: 构建安装包
         shell: bash
         working-directory: desktop/src-tauri
+        env:
+          # 私钥内容本身；没设 TAURI_SIGNING_PRIVATE_KEY_PASSWORD 时 tauri-cli 按空口令处理
+          # （tauri-cli-2.12.2 src/bundle.rs:283），所以这把无口令的密钥只需要这一个 Secret
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: cargo tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
       - name: 上传产物
@@ -53,6 +57,9 @@ jobs:
           name: desktop-${{ matrix.target }}
           path: |
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.sig
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
             desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
           if-no-files-found: error

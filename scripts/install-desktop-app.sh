@@ -12,7 +12,8 @@ marker="$HOME/Library/Application Support/com.classscoresystem.desktop/.autostar
 
 if [ ! -d "$src" ]; then
   echo "找不到构建产物: $src" >&2
-  echo "先跑: (cd src-tauri && cargo tauri build --bundles app)" >&2
+  # createUpdaterArtifacts 打开后，本地产物也要签名才能构建出来，所以带上私钥路径
+  echo "先跑: cd desktop/src-tauri && TAURI_SIGNING_PRIVATE_KEY=\"$HOME/.tauri/class-score.key\" cargo tauri build --bundles app,dmg" >&2
   exit 1
 fi
 
