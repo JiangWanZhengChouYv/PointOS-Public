@@ -1,11 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::sync::Mutex;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager, WindowEvent};
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_updater::UpdaterExt;
 
 /// 开机自启开关。自定义命令不走插件 ACL，所以悬浮球不需要 npm 版的插件 JS API。
 #[tauri::command]
@@ -22,6 +24,77 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> Result<bool, String> {
     app.autolaunch().is_enabled().map_err(|error| error.to_string())
+}
+
+/// 查到的更新先存着，确认之后直接装，省掉第二次网络往返
+#[derive(Default)]
+struct PendingUpdate(Mutex<Option<tauri_plugin_updater::Update>>);
+
+#[derive(serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    current_version: String,
+    notes: Option<String>,
+}
+
+fn text_error(error: impl std::fmt::Display) -> String {
+    error.to_string()
+}
+
+#[tauri::command]
+async fn check_app_update(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let update = app
+        .updater()
+        .map_err(text_error)?
+        .check()
+        .await
+        .map_err(text_error)?;
+
+    let Some(update) = update else {
+        return Ok(None);
+    };
+
+    let info = UpdateInfo {
+        version: update.version.clone(),
+        current_version: update.current_version.clone(),
+        notes: update.body.clone(),
+    };
+
+    // State 与 MutexGuard 都只在这一条语句里存在，不能拆成两个 let
+    app.state::<PendingUpdate>()
+        .0
+        .lock()
+        .map_err(text_error)?
+        .replace(update);
+
+    Ok(Some(info))
+}
+
+#[tauri::command]
+async fn install_app_update(app: AppHandle) -> Result<(), String> {
+    let update = app
+        .state::<PendingUpdate>()
+        .0
+        .lock()
+        .map_err(text_error)?
+        .take()
+        .ok_or_else(|| "没有待安装的更新，请先点「检查更新」".to_string())?;
+
+    update
+        .download_and_install(|_chunk, _total| {}, || {})
+        .await
+        .map_err(text_error)?;
+
+    // Windows 分支在 install 里已经 exit，靠安装包的 /R 重启；
+    // macOS 的插件只把 bundle 原地换掉，重启必须由我们自己发起
+    #[cfg(not(windows))]
+    {
+        app.restart()
+    }
+    #[cfg(windows)]
+    {
+        Ok(())
+    }
 }
 
 /// WebView 里 target=_blank 不会开新窗口，下载链接得交给系统浏览器
@@ -145,12 +218,18 @@ fn main() {
         ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // 更新走 Rust 侧命令，配置从 tauri.conf.json 的 plugins.updater 读，
+        // 所以 JS 侧不需要 npm 版插件包，也不用给窗口加 updater 权限
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(PendingUpdate::default())
         .invoke_handler(tauri::generate_handler![
             set_autostart,
             get_autostart,
             save_text_file,
             open_text_file,
-            open_url
+            open_url,
+            check_app_update,
+            install_app_update
         ])
         // 主窗口点红叉只是隐藏：悬浮球要常驻，数据桥也挂在这个窗口的 JS 上
         .on_window_event(|window, event| {

@@ -24,6 +24,23 @@
     return T.core.invoke('open_text_file');
   };
 
+  // 桌面版 reload 拿到的还是打进二进制的同一份文件，所以网页那套
+  // 「清缓存 + 刷新」的更新提示条只会反复弹、永远关不掉。
+  // showUpdateNotification 是四条触发路径（版本轮询、Service Worker 消息、
+  // updatefound、CACHE_UPDATED）唯一的出口，在这里掐断。
+  window.checkVersionUpdate = function () { return Promise.resolve(); };
+  window.showUpdateNotification = function () {};
+
+  // 「下载桌面版」是给网页版访客看的，桌面版里出现没有意义
+  function removeDesktopDownloadEntries() {
+    document.querySelectorAll('a.desktop-download').forEach(el => el.remove());
+    document.querySelectorAll('.settings-about-item').forEach(function (item) {
+      if (item.querySelector('a[href*="releases"]')) item.remove();
+    });
+  }
+
+  removeDesktopDownloadEntries();
+
   function readSettings() {
     let saved = null;
     try {
@@ -265,37 +282,82 @@
     panel.appendChild(section);
   }
 
-  const VERSION_URL = 'https://cdn.jsdelivr.net/gh/JiangWanZhengChouYv/PointOS-Public@main/docs/version.json';
+  // 自更新：查签名清单 → 确认后下载 → 装完重启，全在 Rust 侧的两个命令里做。
+  // 本地版本取打进二进制的 tauri.conf.json，所以改代码不会误报更新。
+  let localVersion = '';
+  let updatePrompted = false;
 
-  function isNewer(remote, local) {
-    const a = String(remote).split('.').map(n => parseInt(n, 10) || 0);
-    const b = String(local).split('.').map(n => parseInt(n, 10) || 0);
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      const x = a[i] || 0;
-      const y = b[i] || 0;
-      if (x !== y) return x > y;
-    }
-    return false;
+  function setUpdateStatus(text) {
+    const el = document.getElementById('widget-update-status');
+    if (el) el.textContent = text;
   }
 
-  // 桌面版版本来自打包进二进制的 tauri.conf.json，所以本地改代码不会误报更新；
-  // 走 JSDelivr 而不是 api.github.com，是因为教室网络下 CDN 更稳
-  function checkDesktopUpdate() {
-    if (!T.app || !T.app.getVersion) return;
-    Promise.all([
-      T.app.getVersion(),
-      fetch(VERSION_URL, { cache: 'no-store' }).then(response => (response.ok ? response.json() : null))
-    ])
-      .then(function (results) {
-        const local = results[0];
-        const remote = results[1] && results[1].version;
-        if (remote && isNewer(remote, local)) {
-          showToast(`桌面版 v${remote} 已发布，点右上角「下载桌面版」升级`, 'info', 10000);
-        }
-      })
-      .catch(function () {
-        /* 断网或 CDN 抖动都不该影响上课 */
+  function confirmAndInstall(info) {
+    // 主窗口默认可能是隐藏的，确认框必须看得见才能点
+    showMainWindow();
+    return uiConfirm(
+      `发现新版本 v${info.version}（当前 v${localVersion || '未知'}）。下载完成后软件会自动重启完成安装。`,
+      '软件更新'
+    ).then(function (accepted) {
+      if (!accepted) {
+        setUpdateStatus(`发现新版本 v${info.version}，随时可以在这里点「检查更新」安装`);
+        return undefined;
+      }
+      setUpdateStatus(`正在下载 v${info.version}…`);
+      return T.core.invoke('install_app_update').catch(function (error) {
+        setUpdateStatus('更新失败：' + error);
+        showToast(`更新失败：${error}`, 'error');
       });
+    });
+  }
+
+  function checkSelfUpdate(manual) {
+    setUpdateStatus('正在检查更新…');
+    return T.core.invoke('check_app_update')
+      .then(function (info) {
+        if (!info) {
+          setUpdateStatus(`已是最新版本 v${localVersion || '未知'}`);
+          if (manual) showToast('已经是最新版本', 'success');
+          return undefined;
+        }
+        if (!manual && updatePrompted) {
+          setUpdateStatus(`发现新版本 v${info.version}`);
+          return undefined;
+        }
+        updatePrompted = true;
+        return confirmAndInstall(info);
+      })
+      .catch(function (error) {
+        // 断网 / GitHub 抖动不该影响上课，只在设置面板里留一行说明
+        setUpdateStatus('检查更新失败：' + error);
+      });
+  }
+
+  function appendUpdateSection(panel) {
+    const section = makeRow('performance-mode-section widget-mode-section');
+    const title = document.createElement('h4');
+    title.textContent = '软件更新';
+    section.appendChild(title);
+
+    const info = document.createElement('div');
+    info.className = 'performance-info';
+    const status = document.createElement('div');
+    status.id = 'widget-update-status';
+    status.textContent = localVersion
+      ? `当前版本 v${localVersion}`
+      : '正在读取版本…';
+    info.appendChild(status);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'popup-button frost-solid frost-indigo';
+    button.textContent = '检查更新';
+    button.addEventListener('click', function () {
+      checkSelfUpdate(true);
+    });
+    section.appendChild(button);
+    section.appendChild(info);
+    panel.appendChild(section);
   }
 
   function boot() {
@@ -325,7 +387,12 @@
       });
     });
 
-    setTimeout(checkDesktopUpdate, 1500);
+    // 当前版本要从二进制里读，确认框和状态文本都靠它
+    T.app.getVersion()
+      .then(function (version) { localVersion = version; })
+      .catch(function () {})
+      // 开机静默查一次；本机已经问过的版本由 updatePrompted 兜住，不重复打扰
+      .then(function () { setTimeout(function () { checkSelfUpdate(false); }, 1200); });
 
     pushSnapshot();
   }
@@ -343,7 +410,11 @@
   window.createSettingsPopup = function () {
     const result = originalSettingsPopup.apply(this, arguments);
     const panel = document.querySelector('.settings-panel[data-panel="display"]');
-    if (panel) appendWidgetSection(panel);
+    if (panel) {
+      appendWidgetSection(panel);
+      appendUpdateSection(panel);
+    }
+    removeDesktopDownloadEntries();
     return result;
   };
 
