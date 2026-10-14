@@ -1,6 +1,6 @@
 [package]
 name = "class-score-desktop"
-version = "1.8.2"
+version = "1.8.3"
 description = "班级积分管理系统 桌面版"
 authors = ["JiangWanZhengChouYv"]
 repository = "https://github.com/JiangWanZhengChouYv/PointOS-Public"

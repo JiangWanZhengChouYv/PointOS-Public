@@ -217,9 +217,15 @@
   }
 
   async function expand() {
-    restoreOrigin = null;
+    // macOS 的 setContentSize 锚在左下角（tao-0.37.1 util/async.rs:88 直接调
+    // NSWindow.setContentSize），高度从 64 涨到 520 会把顶边往上顶 456，
+    // 所以尺寸改完必须重新按左上角定位；Windows 上 setSize 本就锚在左上角，重复定位无害
+    let origin = null;
+    let target = null;
     try {
       const [monitor, position] = await Promise.all([win.currentMonitor(), win.outerPosition()]);
+      origin = { x: Math.round(position.x), y: Math.round(position.y) };
+      target = origin;
       if (monitor) {
         const scale = monitor.scaleFactor || window.devicePixelRatio || 1;
         const left = monitor.position.x;
@@ -228,22 +234,20 @@
         const bottom = top + monitor.size.height;
         const wantW = EXPANDED.width * scale;
         const wantH = EXPANDED.height * scale;
-        let x = position.x;
-        let y = position.y;
-        let moved = false;
-        if (x + wantW > right) { x = right - wantW; moved = true; }
-        if (y + wantH > bottom) { y = bottom - wantH; moved = true; }
-        if (x < left) { x = left; moved = true; }
-        if (y < top) { y = top; moved = true; }
-        if (moved) {
-          restoreOrigin = { x: Math.round(position.x), y: Math.round(position.y) };
-          await win.setPosition(new T.dpi.PhysicalPosition(Math.round(x), Math.round(y)));
-        }
+        let x = origin.x;
+        let y = origin.y;
+        if (x + wantW > right) x = right - wantW;
+        if (y + wantH > bottom) y = bottom - wantH;
+        if (x < left) x = left;
+        if (y < top) y = top;
+        target = { x: Math.round(x), y: Math.round(y) };
       }
     } catch (error) {
-      /* 拿不到显示器信息时直接原地展开，不影响功能 */
+      /* 拿不到显示器信息时原地展开，不影响功能 */
     }
+    restoreOrigin = origin;
     await resizeTo(EXPANDED);
+    if (target) await win.setPosition(new T.dpi.PhysicalPosition(target.x, target.y));
     expanded = true;
     document.body.dataset.state = 'expanded';
     render();
@@ -253,6 +257,7 @@
     expanded = false;
     document.body.dataset.state = 'collapsed';
     await resizeTo(COLLAPSED);
+    // 缩回去同样会动顶边，所以只要记下过就必定复位
     if (restoreOrigin) {
       await win.setPosition(new T.dpi.PhysicalPosition(restoreOrigin.x, restoreOrigin.y));
       writeJson(GEOMETRY_KEY, restoreOrigin);

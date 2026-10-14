@@ -1,5 +1,5 @@
 // 班级积分管理系统
-// 版本: 1.8.2
+// 版本: 1.8.3
 
 // 存储键名
 const STORAGE_KEY = 'classScoreSystem';
@@ -7,7 +7,7 @@ const WALLPAPER_STORAGE_KEY = 'wallpaperSettings';
 const PERFORMANCE_MODE_KEY = 'classScoreSystem_performanceMode';
 const IMPECCABLE_MODE_KEY = 'classScoreSystem_impeccableMode';
 const LAST_VIEW_VERSION_KEY = 'classScoreSystem_LastViewVersion';
-const CURRENT_VERSION = '1.8.2';
+const CURRENT_VERSION = '1.8.3';
 
 // 桌面版安装包统一从最新 Release 拿
 const RELEASES_URL = 'https://github.com/JiangWanZhengChouYv/PointOS-Public/releases/latest';
@@ -440,6 +440,14 @@ function getPerformanceDescription() {
 
 // 版本日志数据
 const VERSION_LOGS = [
+    {
+        version: '1.8.3',
+        date: '2026-10-13',
+        changes: [
+            '【缺陷修复】悬浮球展开/收起时窗口往上飞一下：macOS 改窗口尺寸锚在左下角，尺寸一变顶边就被顶上去，改完必须重新按左上角定位',
+            '【缺陷修复】球贴着屏幕右下角时，展开的面板会跑到很上面去（原来先定位后改尺寸，clamp 算的是改之前的位置）',
+        ]
+    },
     {
         version: '1.8.2',
         date: '2026-10-13',
