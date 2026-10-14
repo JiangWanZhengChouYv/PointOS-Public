@@ -410,10 +410,10 @@
   window.createSettingsPopup = function () {
     const result = originalSettingsPopup.apply(this, arguments);
     const panel = document.querySelector('.settings-panel[data-panel="display"]');
-    if (panel) {
-      appendWidgetSection(panel);
-      appendUpdateSection(panel);
-    }
+    if (panel) appendWidgetSection(panel);
+    // 软件更新属于"关于"：那里本来就有版本号与更新日志，桌面版又刚好把下载入口移掉
+    const aboutPanel = document.querySelector('.settings-panel[data-panel="about"]');
+    if (aboutPanel) appendUpdateSection(aboutPanel);
     removeDesktopDownloadEntries();
     return result;
   };

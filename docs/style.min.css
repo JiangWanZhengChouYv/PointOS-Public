@@ -1543,6 +1543,28 @@ font-size: 14px;
 color: #4b5563;
 line-height: 1.8;
 }
+.settings-popup {
+width: 92%;
+max-width: 900px;
+max-height: 88vh;
+overflow-y: auto;
+}
+.settings-popup .settings-panel.active {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+gap: 0 20px;
+align-items: start;
+}
+.settings-popup .popup-buttons {
+grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.settings-popup > .popup-cancel {
+display: block;
+width: max-content;
+margin: 12px auto 0;
+position: sticky;
+bottom: 0;
+}
 @media (max-width: 360px) {
 .settings-tab {
 padding: 8px 6px;

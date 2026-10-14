@@ -1818,6 +1818,36 @@ footer p {
     line-height: 1.8;
 }
 
+/* 设置弹窗：内容比屏幕高时，唯一的「取消」按钮会被顶到屏幕外，等于关不掉。
+   这里限高让弹窗自己滚，宽屏时把面板的直接子元素左右分栏，高度直接砍一半。 */
+.settings-popup {
+    width: 92%;
+    max-width: 900px;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.settings-popup .settings-panel.active {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0 20px;
+    align-items: start;
+}
+
+/* 分栏后每格窄了一半，原来固定三列的按钮组要跟着自适应 */
+.settings-popup .popup-buttons {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+/* 取消按钮钉在底部，滚到哪儿都点得到；sticky 要求块级盒，所以自己居中 */
+.settings-popup > .popup-cancel {
+    display: block;
+    width: max-content;
+    margin: 12px auto 0;
+    position: sticky;
+    bottom: 0;
+}
+
 @media (max-width: 360px) {
     .settings-tab {
         padding: 8px 6px;
